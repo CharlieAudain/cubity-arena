@@ -28,6 +28,10 @@ import {
   Grid3x3,
   Grid2x2,
   Box,
+  Filter,
+  ArrowRightLeft,
+  Search,
+  Loader2,
 } from "lucide-react";
 import {
   onAuthStateChanged,
@@ -49,6 +53,7 @@ import {
   orderBy,
   limit,
   onSnapshot,
+  getDocs,
 } from "firebase/firestore";
 import { auth, db } from "./lib/firebase";
 
@@ -342,10 +347,10 @@ const applyCubeMove = (state, move, type) => {
 // --- COMPONENT: SCRAMBLE VISUALIZER ---
 const ScrambleVisualizer = ({ scramble, type }) => {
   const size = type === "2x2" ? 2 : type === "4x4" ? 4 : 3;
-  const [state, setState] = useState(getInitialState(type));
+  const [state, setState] = useState(getSolvedState(size));
 
   useEffect(() => {
-    let currentState = getInitialState(type);
+    let currentState = getSolvedState(size);
     if (scramble) {
       const moves = scramble.split(" ");
       moves.forEach((move) => {
@@ -469,28 +474,161 @@ const LogoVelocity = ({ className }) => (
   </svg>
 );
 
-// --- SUB-COMPONENT: ARENA VIEW (WIP) ---
-const ArenaView = () => {
+// --- HOOK: MATCHMAKING ---
+const useMatchmaking = (user) => {
+  const [status, setStatus] = useState("idle"); // idle, searching, found
+  const [roomId, setRoomId] = useState(null);
+  const [error, setError] = useState(null);
+  const searchRef = useRef(null); // To allow canceling listener
+
+  const findMatch = async () => {
+    if (!user) return;
+    setStatus("searching");
+    setError(null);
+
+    try {
+      // 1. Simple matchmaking: Fetch recent rooms to find a waiting one
+      // Note: In production, use a Cloud Function or real-time queue
+      const roomsRef = collection(
+        db,
+        "artifacts",
+        "cubity-v1",
+        "public",
+        "data",
+        "rooms"
+      );
+      const snapshot = await getDocs(roomsRef); // Fetch all rooms (limit in real app)
+
+      // Filter in memory (Simple MVP)
+      const waitingRoom = snapshot.docs.find((doc) => {
+        const data = doc.data();
+        return data.status === "waiting" && data.player1.uid !== user.uid;
+      });
+
+      if (waitingRoom) {
+        // JOIN ROOM
+        const roomRef = doc(
+          db,
+          "artifacts",
+          "cubity-v1",
+          "public",
+          "data",
+          "rooms",
+          waitingRoom.id
+        );
+        await updateDoc(roomRef, {
+          status: "playing",
+          player2: { uid: user.uid, name: user.displayName || "Guest" },
+        });
+        setRoomId(waitingRoom.id);
+        setStatus("found");
+      } else {
+        // HOST ROOM
+        const newRoom = await addDoc(roomsRef, {
+          status: "waiting",
+          createdAt: new Date().toISOString(),
+          player1: { uid: user.uid, name: user.displayName || "Guest" },
+          scramble: generateScramble("3x3"), // Shared scramble
+        });
+        setRoomId(newRoom.id);
+
+        // Listen for opponent
+        const unsubscribe = onSnapshot(newRoom, (docSnap) => {
+          if (docSnap.exists() && docSnap.data().status === "playing") {
+            setStatus("found");
+          }
+        });
+        searchRef.current = unsubscribe;
+      }
+    } catch (err) {
+      console.error("Matchmaking failed:", err);
+      setError("Could not connect to arena.");
+      setStatus("idle");
+    }
+  };
+
+  const cancelSearch = async () => {
+    if (searchRef.current) searchRef.current(); // Unsubscribe
+    // Ideally delete room if hosting, skipping for brevity in hook
+    setStatus("idle");
+    setRoomId(null);
+  };
+
+  return { status, roomId, findMatch, cancelSearch, error };
+};
+
+// --- SUB-COMPONENT: ARENA VIEW (Updated) ---
+const ArenaView = ({ user }) => {
+  const { status, roomId, findMatch, cancelSearch, error } =
+    useMatchmaking(user);
+
   return (
     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 flex flex-col items-center justify-center h-[60vh] text-center px-4">
-      <div className="w-24 h-24 bg-blue-600/10 rounded-full flex items-center justify-center mb-6 border border-blue-500/20">
-        <Swords className="w-12 h-12 text-blue-500" />
-      </div>
-      <h2 className="text-3xl font-black italic text-white mb-2 tracking-tight">
-        THE ARENA
-      </h2>
-      <p className="text-slate-400 max-w-md mb-8">
-        Multiplayer battles are currently under construction. Prepare to race
-        against cubers worldwide.
-      </p>
-      <div className="flex flex-col gap-3 w-full max-w-xs">
-        <button
-          disabled
-          className="bg-slate-800 text-slate-500 px-6 py-4 rounded-xl font-bold border border-white/5 flex items-center justify-center gap-2 cursor-not-allowed"
-        >
-          <Construction className="w-5 h-5" /> Under Construction
-        </button>
-      </div>
+      {status === "idle" && (
+        <>
+          <div className="w-24 h-24 bg-blue-600/10 rounded-full flex items-center justify-center mb-6 border border-blue-500/20 group">
+            <Swords className="w-12 h-12 text-blue-500 group-hover:scale-110 transition-transform duration-300" />
+          </div>
+          <h2 className="text-3xl font-black italic text-white mb-2 tracking-tight">
+            THE ARENA
+          </h2>
+          <p className="text-slate-400 max-w-md mb-8">
+            Race against cubers worldwide in real-time. 1v1 Ranked Battles.
+          </p>
+
+          <div className="flex flex-col gap-3 w-full max-w-xs">
+            <button
+              onClick={findMatch}
+              className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-4 rounded-xl font-bold shadow-lg shadow-blue-500/25 flex items-center justify-center gap-2 transition-all active:scale-95"
+            >
+              <Swords className="w-5 h-5" /> FIND MATCH
+            </button>
+            {error && <p className="text-red-400 text-xs mt-2">{error}</p>}
+          </div>
+        </>
+      )}
+
+      {status === "searching" && (
+        <div className="flex flex-col items-center">
+          <div className="relative mb-8">
+            <div className="w-24 h-24 bg-blue-600/10 rounded-full flex items-center justify-center border border-blue-500/20 animate-pulse">
+              <Search className="w-10 h-10 text-blue-500" />
+            </div>
+            <div className="absolute inset-0 rounded-full border-4 border-blue-500/20 animate-ping"></div>
+          </div>
+          <h2 className="text-2xl font-bold text-white mb-2">
+            Searching for opponent...
+          </h2>
+          <p className="text-slate-500 text-sm mb-8">Estimated wait: 5-10s</p>
+          <button
+            onClick={cancelSearch}
+            className="text-slate-400 hover:text-white text-sm font-bold uppercase tracking-wider border border-white/10 px-6 py-2 rounded-full"
+          >
+            Cancel
+          </button>
+        </div>
+      )}
+
+      {status === "found" && (
+        <div className="flex flex-col items-center animate-in zoom-in duration-300">
+          <div className="w-24 h-24 bg-green-500/10 rounded-full flex items-center justify-center mb-6 border border-green-500/20">
+            <Trophy className="w-12 h-12 text-green-500" />
+          </div>
+          <h2 className="text-3xl font-black italic text-white mb-2 tracking-tight">
+            MATCH FOUND!
+          </h2>
+          <p className="text-slate-400 mb-8">
+            Entering Room:{" "}
+            <span className="font-mono text-white bg-white/10 px-2 py-1 rounded">
+              {roomId?.slice(0, 6)}
+            </span>
+          </p>
+
+          <button className="bg-green-600 text-white px-8 py-3 rounded-xl font-bold flex items-center gap-2 animate-pulse">
+            <Loader2 className="w-5 h-5 animate-spin" /> CONNECTING
+          </button>
+        </div>
+      )}
     </div>
   );
 };
@@ -1562,7 +1700,7 @@ export default function App() {
 
         {activeTab === "stats" && user && <StatsView userId={user.uid} />}
 
-        {activeTab === "arena" && user && <ArenaView />}
+        {activeTab === "arena" && user && <ArenaView user={user} />}
 
         {activeTab === "timer" &&
           (user ? (
