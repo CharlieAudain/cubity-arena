@@ -11,6 +11,11 @@
   --font-mono: "JetBrains Mono", "monospace";
 }
 
+/* Custom Utility for Mobile Safe Areas (iPhones) */
+@utility pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
 :root {
   font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
@@ -19,7 +24,6 @@
 }
 
 body {
-  /* Now Tailwind knows what 'bg-cubity-bg' is because of the @theme block above */
   @apply bg-cubity-bg text-slate-100;
   margin: 0;
   min-width: 320px;
