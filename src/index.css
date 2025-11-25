@@ -1,0 +1,29 @@
+@import "tailwindcss";
+
+@theme {
+  --color-cubity-bg: #0f172a;
+  --color-cubity-panel: #1e293b;
+  --color-cubity-accent: #3b82f6;
+  --color-cubity-success: #22c55e;
+  --color-cubity-danger: #ef4444;
+
+  --font-sans: "Inter", "system-ui", "sans-serif";
+  --font-mono: "JetBrains Mono", "monospace";
+}
+
+:root {
+  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  color-scheme: dark;
+}
+
+body {
+  /* Now Tailwind knows what 'bg-cubity-bg' is because of the @theme block above */
+  @apply bg-cubity-bg text-slate-100;
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  /* Prevent pull-to-refresh on mobile for app-like feel */
+  overscroll-behavior-y: none;
+}
