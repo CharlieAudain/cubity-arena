@@ -14,6 +14,7 @@ import {
   Edit2,
   Save,
   Swords,
+  AlertCircle,
 } from "lucide-react";
 import {
   onAuthStateChanged,
@@ -23,7 +24,7 @@ import {
   signInWithPopup,
   linkWithPopup,
 } from "firebase/auth";
-import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
+import { doc, getDoc, setDoc, updateDoc, deleteDoc } from "firebase/firestore";
 import { auth, db } from "./lib/firebase";
 
 export default function App() {
@@ -34,9 +35,9 @@ export default function App() {
   const [onlineCount, setOnlineCount] = useState(1240);
   const [error, setError] = useState(null);
 
-  // New State for editing username
   const [isEditingName, setIsEditingName] = useState(false);
   const [tempName, setTempName] = useState("");
+  const [nameError, setNameError] = useState(null);
 
   // 1. LISTEN: Auth & Database
   useEffect(() => {
@@ -91,7 +92,7 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  // 2. ACTION: Guest Login
+  // 2. ACTIONS
   const handleGuestLogin = async () => {
     setLoading(true);
     try {
@@ -102,7 +103,6 @@ export default function App() {
     }
   };
 
-  // 3. ACTION: Google Login
   const handleGoogleLogin = async () => {
     setLoading(true);
     const provider = new GoogleAuthProvider();
@@ -128,10 +128,71 @@ export default function App() {
     setUserData(null);
   };
 
-  // 4. ACTION: Update Username
+  // 4. ACTION: Unique Username Save (Robust Version)
   const saveName = async () => {
-    if (!user || !tempName.trim()) return;
+    setNameError(null);
+    const cleanName = tempName.trim();
+    const cleanId = cleanName.toLowerCase();
+
+    if (!user || cleanName.length < 3) {
+      setNameError("Name must be 3+ chars.");
+      return;
+    }
+
+    if (cleanName === userData.displayName) {
+      setIsEditingName(false);
+      return;
+    }
+
     try {
+      // Step A: Check Public Registry for duplicates
+      const usernameRef = doc(
+        db,
+        "artifacts",
+        "cubity-v1",
+        "public",
+        "data",
+        "usernames",
+        cleanId
+      );
+      const usernameSnap = await getDoc(usernameRef);
+
+      if (usernameSnap.exists()) {
+        setNameError("Username is taken!");
+        return;
+      }
+
+      // Step B: Claim the new name
+      // This is the critical write that reserves the name
+      await setDoc(usernameRef, { uid: user.uid });
+
+      // Step C: Try to release the old name (Fail-Safe)
+      // We wrap this in a separate try/catch so it doesn't break the whole save if it fails
+      if (userData.displayName && userData.displayName !== "Guest Cuber") {
+        try {
+          const oldId = userData.displayName.toLowerCase();
+          if (oldId !== cleanId) {
+            const oldNameRef = doc(
+              db,
+              "artifacts",
+              "cubity-v1",
+              "public",
+              "data",
+              "usernames",
+              oldId
+            );
+            await deleteDoc(oldNameRef);
+          }
+        } catch (deleteErr) {
+          console.warn(
+            "Could not delete old username (likely didn't exist):",
+            deleteErr
+          );
+          // We ignore this error and proceed
+        }
+      }
+
+      // Step D: Update User Profile
       const userRef = doc(
         db,
         "artifacts",
@@ -141,15 +202,17 @@ export default function App() {
         "profile",
         "main"
       );
-      await updateDoc(userRef, { displayName: tempName });
-      setUserData((prev) => ({ ...prev, displayName: tempName }));
+      await updateDoc(userRef, { displayName: cleanName });
+
+      setUserData((prev) => ({ ...prev, displayName: cleanName }));
       setIsEditingName(false);
     } catch (err) {
       console.error("Name Update Error:", err);
+      // Only show error if Step B (Claiming) failed
+      setNameError("Save failed. Try again.");
     }
   };
 
-  // 5. ACTION: Find Match (Placeholder)
   const handleFindMatch = () => {
     alert("Searching for opponent... (Matchmaking coming in next sprint)");
   };
@@ -227,36 +290,49 @@ export default function App() {
                   <span>Rank: {userData.rank}</span>
                 </div>
 
-                {/* Editable Name */}
-                <div className="flex items-center gap-3 mb-6">
-                  {isEditingName ? (
-                    <div className="flex items-center gap-2">
-                      <input
-                        value={tempName}
-                        onChange={(e) => setTempName(e.target.value)}
-                        onKeyDown={(e) => e.key === "Enter" && saveName()}
-                        autoFocus
-                        className="bg-slate-800 border border-blue-500 text-2xl font-bold text-white px-2 py-1 rounded outline-none w-48"
-                      />
-                      <button
-                        onClick={saveName}
-                        className="p-2 bg-blue-600 rounded-lg text-white hover:bg-blue-500"
-                      >
-                        <Save className="w-5 h-5" />
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-3 group">
-                      <h1 className="text-3xl font-bold text-white">
-                        {userData.displayName}
-                      </h1>
-                      <button
-                        onClick={() => setIsEditingName(true)}
-                        className="opacity-0 group-hover:opacity-100 p-1 text-slate-500 hover:text-white transition-opacity"
-                      >
-                        <Edit2 className="w-4 h-4" />
-                      </button>
-                    </div>
+                {/* Editable Name with Validation UI */}
+                <div className="flex flex-col gap-2 mb-6">
+                  <div className="flex items-center gap-3">
+                    {isEditingName ? (
+                      <div className="flex items-center gap-2">
+                        <input
+                          value={tempName}
+                          onChange={(e) => {
+                            setTempName(e.target.value);
+                            setNameError(null);
+                          }}
+                          onKeyDown={(e) => e.key === "Enter" && saveName()}
+                          autoFocus
+                          placeholder="Username"
+                          className={`bg-slate-800 border ${
+                            nameError ? "border-red-500" : "border-blue-500"
+                          } text-2xl font-bold text-white px-2 py-1 rounded outline-none w-48`}
+                        />
+                        <button
+                          onClick={saveName}
+                          className="p-2 bg-blue-600 rounded-lg text-white hover:bg-blue-500"
+                        >
+                          <Save className="w-5 h-5" />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-3 group">
+                        <h1 className="text-3xl font-bold text-white">
+                          {userData.displayName}
+                        </h1>
+                        <button
+                          onClick={() => setIsEditingName(true)}
+                          className="opacity-0 group-hover:opacity-100 p-1 text-slate-500 hover:text-white transition-opacity"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                  {nameError && (
+                    <span className="text-red-400 text-xs flex items-center gap-1">
+                      <AlertCircle className="w-3 h-3" /> {nameError}
+                    </span>
                   )}
                 </div>
 
