@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Trophy, Swords, RotateCcw, Grid2x2, Box, Grid3x3 } from 'lucide-react';
-import { generateScramble, getDailySeed, getSolvedState, applyCubeMove, getInverseMove } from '../utils/cube';
+import { generateScramble, getDailySeed, getSolvedState, applyCubeMove, getInverseMove, simplifyMoveStack } from '../utils/cube';
 import { calculateAverage } from '../utils/stats';
 import ScrambleVisualizer from './ScrambleVisualizer';
 import SmartCube3D from './SmartCube3D';
@@ -156,8 +156,8 @@ const TimerView = ({ user, userData, onSolveComplete, dailyMode = false, recentS
                   // Correct correction! Pop from stack.
                   setCorrectionStack(prev => prev.slice(0, -1));
               } else {
-                  // Wrong move while correcting? Add to stack!
-                  setCorrectionStack(prev => [...prev, getInverseMove(userMove)]);
+                  // Wrong move while correcting? Add to stack with simplification!
+                  setCorrectionStack(prev => simplifyMoveStack(prev, getInverseMove(userMove)));
               }
               return;
           }

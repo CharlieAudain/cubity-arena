@@ -229,3 +229,37 @@ export const getInverseMove = (move) => {
   if (move.includes("'")) return move.replace("'", ""); // R' -> R
   return move + "'"; // R -> R'
 };
+
+export const simplifyMoveStack = (stack, newMove) => {
+    if (stack.length === 0) return [newMove];
+
+    const lastMove = stack[stack.length - 1];
+    const face1 = lastMove[0];
+    const face2 = newMove[0];
+
+    // Different faces? Just push.
+    if (face1 !== face2) return [...stack, newMove];
+
+    // Same face: Merge
+    const getPower = (m) => {
+        if (m.includes("2")) return 2;
+        if (m.includes("'")) return -1;
+        return 1;
+    };
+
+    const p1 = getPower(lastMove);
+    const p2 = getPower(newMove);
+    let sum = (p1 + p2) % 4;
+    if (sum <= -2) sum += 4; // Handle negative wrap
+    if (sum === 3 || sum === -1) sum = -1; // Standardize '
+    
+    if (sum === 0) {
+        // Cancel out
+        return stack.slice(0, -1);
+    }
+
+    const newSuffix = sum === 2 ? "2" : sum === -1 ? "'" : "";
+    const mergedMove = face1 + newSuffix;
+    
+    return [...stack.slice(0, -1), mergedMove];
+};
