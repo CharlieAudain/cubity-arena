@@ -96,6 +96,19 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
+  // Save MAC Address if new
+  useEffect(() => {
+      if (smartCube.isConnected && smartCube.deviceMAC && user && userData) {
+          if (userData.macAddress !== smartCube.deviceMAC) {
+              console.log("Saving new MAC address:", smartCube.deviceMAC);
+              const userRef = doc(db, 'artifacts', 'cubity-v1', 'users', user.uid, 'profile', 'main');
+              updateDoc(userRef, { macAddress: smartCube.deviceMAC })
+                  .then(() => setUserData(prev => ({ ...prev, macAddress: smartCube.deviceMAC })))
+                  .catch(err => console.error("Failed to save MAC:", err));
+          }
+      }
+  }, [smartCube.isConnected, smartCube.deviceMAC, user]);
+
   // 2. ACTIONS
   const handleGuestLogin = async () => {
     setLoading(true);
@@ -215,7 +228,7 @@ export default function App() {
         <div>
           {/* SMART CUBE CONNECT BUTTON */}
           <button 
-            onClick={smartCube.isConnected ? smartCube.disconnectCube : smartCube.connectCube} 
+            onClick={smartCube.isConnected ? smartCube.disconnectCube : () => smartCube.connectCube(userData?.macAddress)} 
             className={`mr-4 px-4 py-2 rounded-lg text-xs font-bold uppercase transition-colors flex items-center gap-2 ${smartCube.isConnected ? 'bg-green-500/20 text-green-400 border border-green-500/30' : 'bg-slate-800 text-slate-400 hover:text-white'}`}
           >
             <Bluetooth className="w-4 h-4" /> {smartCube.isConnected ? 'Connected' : 'Connect Cube'}
