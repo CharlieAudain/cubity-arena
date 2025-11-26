@@ -13,7 +13,7 @@ import BattleRoom from './BattleRoom';
 
 const ArenaView = ({ user, smartCube }) => {
   const { status, roomId, roomData, findMatch, cancelSearch, error } = useMatchmaking(user);
-  const [queueType, setQueueType] = useState('3x3'); 
+
   const [debugRoom, setDebugRoom] = useState(null);
 
   if (debugRoom) {
@@ -33,29 +33,38 @@ const ArenaView = ({ user, smartCube }) => {
           </div>
           <h2 className="text-3xl font-black italic text-white mb-2 tracking-tight">THE ARENA</h2>
           <p className="text-slate-400 max-w-md mb-8">Race against cubers worldwide in real-time. 1v1 Ranked Battles.</p>
-          <div className="flex bg-slate-900 p-1 rounded-lg border border-white/10 mb-8">
-            <button onMouseUp={blurOnUI} onClick={() => setQueueType('2x2')} className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors ${queueType==='2x2' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:text-white'}`}>2x2</button>
-            <button onMouseUp={blurOnUI} onClick={() => setQueueType('3x3')} className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors ${queueType==='3x3' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:text-white'}`}>3x3</button>
-            <button onMouseUp={blurOnUI} onClick={() => setQueueType('4x4')} className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors ${queueType==='4x4' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:text-white'}`}>4x4</button>
-          </div>
           <div className="flex flex-col gap-3 w-full max-w-xs">
-            <button onClick={() => findMatch(queueType)} className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-4 rounded-xl font-bold shadow-lg shadow-blue-500/25 flex items-center justify-center gap-2 transition-all active:scale-95">
-              <Swords className="w-5 h-5" /> FIND MATCH ({queueType})
+            <button onClick={() => findMatch('3x3')} className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-4 rounded-xl font-bold shadow-lg shadow-blue-500/25 flex items-center justify-center gap-2 transition-all active:scale-95">
+              <Swords className="w-5 h-5" /> FIND MATCH
             </button>
             {error && <p className="text-red-400 text-xs mt-2">{error}</p>}
             
-            {/* DEBUG ROOM BUTTON */}
-            <button onClick={() => {
-                setDebugRoom({
-                    id: 'debug-room-1',
-                    player1: { uid: user?.uid || 'p1', name: user?.displayName || 'Player 1' },
-                    player2: { uid: 'other', name: 'Opponent' },
-                    scramble: "R U R' U' R U R' U' R U R' U'",
-                    type: '3x3'
-                });
-            }} className="mt-4 bg-slate-800 text-slate-500 text-xs px-4 py-2 rounded-lg font-mono hover:text-white hover:bg-slate-700 transition-colors">
-                ENTER DEBUG ROOM (NO FIRESTORE)
-            </button>
+            <div className="flex gap-2">
+                <button onClick={() => {
+                    setDebugRoom({
+                        id: 'debug-room-1',
+                        player1: { uid: user?.uid || 'p1', name: 'Host (P1)' },
+                        player2: { uid: 'other', name: 'Guest (P2)' },
+                        scramble: "R U R' U' R U R' U' R U R' U'",
+                        type: '3x3',
+                        isHost: true
+                    });
+                }} className="flex-1 mt-4 bg-slate-800 text-slate-500 text-[10px] px-2 py-2 rounded-lg font-mono hover:text-white hover:bg-slate-700 transition-colors">
+                    DEBUG: ENTER AS P1
+                </button>
+                <button onClick={() => {
+                    setDebugRoom({
+                        id: 'debug-room-1',
+                        player1: { uid: 'other', name: 'Host (P1)' },
+                        player2: { uid: user?.uid || 'p2', name: 'Guest (P2)' },
+                        scramble: "R U R' U' R U R' U' R U R' U'",
+                        type: '3x3',
+                        isHost: false
+                    });
+                }} className="flex-1 mt-4 bg-slate-800 text-slate-500 text-[10px] px-2 py-2 rounded-lg font-mono hover:text-white hover:bg-slate-700 transition-colors">
+                    DEBUG: ENTER AS P2
+                </button>
+            </div>
           </div>
         </>
       )}
@@ -68,7 +77,7 @@ const ArenaView = ({ user, smartCube }) => {
             <div className="absolute inset-0 rounded-full border-4 border-blue-500/20 animate-ping"></div>
           </div>
           <h2 className="text-2xl font-bold text-white mb-2">Searching for opponent...</h2>
-          <p className="text-slate-500 text-sm mb-8">Queue: {queueType}</p>
+          <p className="text-slate-500 text-sm mb-8">Queue: 3x3</p>
           <button onClick={cancelSearch} className="text-slate-400 hover:text-white text-sm font-bold uppercase tracking-wider border border-white/10 px-6 py-2 rounded-full">
             Cancel
           </button>

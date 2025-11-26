@@ -1,102 +1,62 @@
-import { useState, useEffect, useRef } from 'react';
-import { doc, getDoc, updateDoc, deleteDoc, collection, addDoc, onSnapshot, getDocs } from 'firebase/firestore';
-import { db } from '../lib/firebase';
-import { generateScramble } from '../utils/cube';
+import { useState, useEffect } from 'react';
+import { useSocket } from './useSocket';
 
-// --- HOOK: MATCHMAKING ---
 export const useMatchmaking = (user) => {
-  const [status, setStatus] = useState('idle'); 
-  const [roomId, setRoomId] = useState(null);
-  const [roomData, setRoomData] = useState(null); 
-  const [error, setError] = useState(null);
-  const searchRef = useRef(null);
-  const roomIdRef = useRef(null);
-  const statusRef = useRef('idle'); 
+    const [status, setStatus] = useState('idle'); // idle, searching, found
+    const [roomId, setRoomId] = useState(null);
+    const [roomData, setRoomData] = useState(null);
+    const [error, setError] = useState(null);
+    
+    const socket = useSocket();
 
-  useEffect(() => {
-    statusRef.current = status;
-  }, [status]);
+    useEffect(() => {
+        if (!socket) return;
 
-  const findMatch = async (queueType = '3x3') => {
-    if (!user) return;
-    setStatus('searching');
-    setError(null);
-
-    try {
-      const roomsRef = collection(db, 'artifacts', 'cubity-v1', 'public', 'data', 'rooms');
-      const snapshot = await getDocs(roomsRef); 
-      
-      const waitingRoom = snapshot.docs.find(doc => {
-        const data = doc.data();
-        return data.status === 'waiting' && data.player1.uid !== user.uid && (data.type === queueType || (!data.type && queueType === '3x3'));
-      });
-
-      if (waitingRoom) {
-        const roomRef = doc(db, 'artifacts', 'cubity-v1', 'public', 'data', 'rooms', waitingRoom.id);
-        await updateDoc(roomRef, {
-          status: 'playing',
-          player2: { uid: user.uid, name: user.displayName || 'Guest' }
+        // Listen for Match Found
+        socket.on('match_found', (data) => {
+            console.log("MATCH FOUND!", data);
+            setStatus('found');
+            setRoomId(data.roomId);
+            
+            // Construct roomData similar to what Firestore provided
+            setRoomData({
+                id: data.roomId,
+                player1: data.isHost ? user : data.opponent,
+                player2: data.isHost ? data.opponent : user,
+                scramble: data.scramble,
+                type: '3x3',
+                isHost: data.isHost // Helper for WebRTC
+            });
         });
-        setRoomId(waitingRoom.id);
-        roomIdRef.current = waitingRoom.id; 
+
+        return () => {
+            socket.off('match_found');
+        };
+    }, [socket, user]);
+
+    const findMatch = (queueType) => {
+        if (!user) {
+            setError("You must be logged in to play.");
+            return;
+        }
         
-        const unsubscribe = onSnapshot(roomRef, (docSnap) => {
-             if(docSnap.exists()) {
-                 setRoomData(docSnap.data());
-                 if (docSnap.data().status === 'playing') setStatus('found');
-             }
-        });
-        searchRef.current = unsubscribe;
-      } else {
-        const newRoom = await addDoc(roomsRef, {
-          status: 'waiting',
-          createdAt: new Date().toISOString(),
-          player1: { uid: user.uid, name: user.displayName || 'Guest' },
-          scramble: generateScramble(queueType),
-          type: queueType 
-        });
-        setRoomId(newRoom.id);
-        roomIdRef.current = newRoom.id; 
+        setStatus('searching');
+        setError(null);
         
-        const unsubscribe = onSnapshot(newRoom, (docSnap) => {
-          if (docSnap.exists()) {
-             setRoomData(docSnap.data());
-             if (docSnap.data().status === 'playing') setStatus('found');
-          }
+        socket.emit('join_queue', { 
+            queueType, 
+            user: { 
+                uid: user.uid, 
+                displayName: user.displayName, 
+                elo: user.elo || 800 
+            } 
         });
-        searchRef.current = unsubscribe;
-      }
-    } catch (err) {
-      console.error("Matchmaking failed:", err);
-      setError("Could not connect to arena.");
-      setStatus('idle');
-    }
-  };
+    };
 
-  const cancelSearch = async () => {
-    if (searchRef.current) searchRef.current(); 
-    if (roomIdRef.current && statusRef.current === 'searching') {
-        try {
-            const roomRef = doc(db, 'artifacts', 'cubity-v1', 'public', 'data', 'rooms', roomIdRef.current);
-            const snap = await getDoc(roomRef);
-            if (snap.exists() && snap.data().status === 'waiting' && snap.data().player1.uid === user.uid) {
-                await deleteDoc(roomRef);
-            }
-        } catch (e) { console.warn("Cleanup ignored:", e); }
-    }
-    setStatus('idle');
-    setRoomId(null);
-    setRoomData(null);
-    roomIdRef.current = null;
-  };
+    const cancelSearch = () => {
+        setStatus('idle');
+        socket.emit('leave_queue'); // Server should handle this (or just filter by socket id on disconnect)
+    };
 
-  useEffect(() => {
-      return () => {
-          if (statusRef.current === 'searching') {
-              cancelSearch();
-          }
-      }
-  }, []); 
-
-  return { status, roomId, roomData, findMatch, cancelSearch, error };
+    return { status, roomId, roomData, findMatch, cancelSearch, error };
 };

@@ -72,8 +72,16 @@ export const useSmartCube = () => {
   const retryWithMac = async (macAddress) => {
       setError(null);
       try {
-          // connectGanCube expects a provider function, not a string
-          const conn = await connectGanCube(async () => macAddress);
+          // Sanitize MAC: Remove colons, dashes, spaces, ensure uppercase
+          const cleanMac = macAddress.replace(/[^a-fA-F0-9]/g, '').toUpperCase();
+          console.log("Retrying with sanitized MAC:", cleanMac);
+
+          if (cleanMac.length !== 12) {
+              throw new Error(`Invalid MAC length: ${cleanMac.length} chars (expected 12 hex chars)`);
+          }
+
+          // connectGanCube expects a provider function
+          const conn = await connectGanCube(async () => cleanMac);
           setupConnection(conn);
       } catch (err) {
           console.error("Retry Error:", err);

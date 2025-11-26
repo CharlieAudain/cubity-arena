@@ -12,12 +12,17 @@
   "dependencies": {
     "@tailwindcss/postcss": "^4.1.17",
     "@tailwindcss/vite": "^4.1.17",
+    "cors": "^2.8.5",
     "cubing": "^0.61.0",
+    "express": "^5.1.0",
     "firebase": "^12.6.0",
     "gan-web-bluetooth": "^3.0.2",
     "lucide-react": "^0.554.0",
     "react": "^19.2.0",
-    "react-dom": "^19.2.0"
+    "react-dom": "^19.2.0",
+    "socket.io": "^4.8.1",
+    "socket.io-client": "^4.8.1",
+    "uuid": "^13.0.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
