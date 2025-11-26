@@ -231,39 +231,84 @@ export const getInverseMove = (move) => {
 };
 
 export const simplifyMoveStack = (stack, newMove) => {
-    if (stack.length === 0) return [newMove];
-
-    const lastMove = stack[stack.length - 1];
+    // 1. Add new move
+    let moves = [...stack, newMove];
     
-    // Helper to get base (e.g. "R", "Rw", "F")
-    const getBase = (m) => m.replace(/['2]/g, '');
-    
-    const base1 = getBase(lastMove);
-    const base2 = getBase(newMove);
+    // 2. Optimize iteratively until no changes
+    let changed = true;
+    while (changed) {
+        changed = false;
+        const newMoves = [];
+        
+        for (let i = 0; i < moves.length; i++) {
+            if (i === moves.length - 1) {
+                newMoves.push(moves[i]);
+                break;
+            }
 
-    // Different bases? Just push.
-    if (base1 !== base2) return [...stack, newMove];
-
-    // Same base: Merge
-    const getPower = (m) => {
-        if (m.includes("2")) return 2;
-        if (m.includes("'")) return -1;
-        return 1;
-    };
-
-    const p1 = getPower(lastMove);
-    const p2 = getPower(newMove);
-    let sum = (p1 + p2) % 4;
-    if (sum <= -2) sum += 4; // Handle negative wrap
-    if (sum === 3 || sum === -1) sum = -1; // Standardize '
-    
-    if (sum === 0) {
-        // Cancel out
-        return stack.slice(0, -1);
+            const m1 = moves[i];
+            const m2 = moves[i+1];
+            
+            const base1 = m1.replace(/['2]/g, '');
+            const base2 = m2.replace(/['2]/g, '');
+            
+            // Same base? Merge.
+            if (base1 === base2) {
+                const getPower = (m) => {
+                    if (m.includes("2")) return 2;
+                    if (m.includes("'")) return -1;
+                    return 1;
+                };
+                let sum = (getPower(m1) + getPower(m2)) % 4;
+                if (sum <= -2) sum += 4;
+                if (sum === 3 || sum === -1) sum = -1;
+                
+                if (sum === 0) {
+                    // Cancelled out completely
+                    i++; // Skip both
+                    changed = true;
+                } else {
+                    // Merged
+                    const suffix = sum === 2 ? "2" : sum === -1 ? "'" : "";
+                    newMoves.push(base1 + suffix);
+                    i++; // Skip both (replaced by one)
+                    changed = true;
+                }
+            } 
+            // Independent axes? Check if we can swap to merge with next
+            else if (areIndependent(base1, base2)) {
+                // Look ahead to i+2
+                if (i + 2 < moves.length) {
+                    const m3 = moves[i+2];
+                    const base3 = m3.replace(/['2]/g, '');
+                    if (base1 === base3) {
+                        // m1 and m3 can merge! Swap m1 and m2.
+                        // We don't merge here, just swap and let next iteration handle merge
+                        newMoves.push(m2);
+                        newMoves.push(m1);
+                        i++; // Skip m2 (pushed m2 then m1)
+                        changed = true;
+                        // Continue loop from i+2 next time? 
+                        // Actually we just swapped. m1 is now at i+1.
+                        // Let's just restart the loop or let the next pass handle it.
+                        // Pushing m2, m1 effectively swaps them in the new array.
+                        // The loop continues processing from i+2.
+                    } else {
+                        newMoves.push(m1);
+                    }
+                } else {
+                    newMoves.push(m1);
+                }
+            } else {
+                newMoves.push(m1);
+            }
+        }
+        moves = newMoves;
     }
+    return moves;
+};
 
-    const newSuffix = sum === 2 ? "2" : sum === -1 ? "'" : "";
-    const mergedMove = base1 + newSuffix;
-    
-    return [...stack.slice(0, -1), mergedMove];
+const areIndependent = (b1, b2) => {
+    const pairs = [['R','L'], ['U','D'], ['F','B']];
+    return pairs.some(p => (p[0] === b1 && p[1] === b2) || (p[0] === b2 && p[1] === b1));
 };
