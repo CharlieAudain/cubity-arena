@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { TwistyPlayer } from 'cubing/twisty';
 
-const SmartCube3D = ({ scramble, type = '3x3', customState, onInit, isConnected }) => {
+const SmartCube3D = ({ scramble, type = '3x3', customState, onInit, isConnected, syncTrigger }) => {
   const containerRef = useRef(null);
   const playerRef = useRef(null);
 
@@ -75,6 +75,15 @@ const SmartCube3D = ({ scramble, type = '3x3', customState, onInit, isConnected 
       isAnimating.current = false;
       processQueue(); // Process next move
   };
+
+  // Handle Manual Sync Trigger
+  useEffect(() => {
+      if (playerRef.current && isConnected && syncTrigger > 0) {
+          playerRef.current.alg = ""; // Reset to solved
+          playerRef.current.jumpToEnd();
+          moveQueue.current = []; // Clear queue
+      }
+  }, [syncTrigger, isConnected]);
 
   // Handle Live Moves
   useEffect(() => {
