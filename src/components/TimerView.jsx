@@ -45,16 +45,22 @@ const TimerView = ({ user, userData, onSolveComplete, dailyMode = false, recentS
             
             // Check for Solved State (Auto-Stop)
             if (timerState === 'RUNNING') {
-                const isSolved = isStateSolved(newState);
+                let isSolved = false;
                 
-                console.log("Auto-Stop Check:", { 
-                    isSolved, 
-                    timerState, 
-                    moves: smartCube.lastMove.move
-                });
-
+                // Prefer hardware facelets if available (most reliable)
+                if (smartCube.facelets) {
+                    // GAN facelets string: "UUUUUUUUURRRRRRRRRFFFFFFFFFDDDDDDDDDLLLLLLLLLBBBBBBBBB"
+                    // Check if each face (9 chars) consists of the same char
+                    const faces = smartCube.facelets.match(/.{1,9}/g);
+                    if (faces && faces.length === 6) {
+                        isSolved = faces.every(face => face.split('').every(c => c === face[0]));
+                    }
+                } else {
+                    // Fallback to internal state tracking
+                    isSolved = isStateSolved(newState);
+                }
+                
                 if (isSolved) {
-                    console.log("Cube Solved! Stopping Timer.");
                     stopTimer();
                 }
             }
@@ -169,20 +175,28 @@ const TimerView = ({ user, userData, onSolveComplete, dailyMode = false, recentS
       }
 
       inspectionIntervalRef.current = setInterval(() => {
-          setInspectionTime(prev => {
-              const next = prev - 1;
-              
-              // Audio Alerts
-              if (next === 7) speak("Eight Seconds"); // 8s elapsed (15-7=8)
-              if (next === 3) speak("Twelve Seconds"); // 12s elapsed (15-3=12)
-              
-              // Penalties
-              if (next === -1) setPenalty('+2'); // 16s elapsed
-              if (next === -3) setPenalty('DNF'); // 18s elapsed (17s limit passed)
-              
-              return next;
-          });
+          setInspectionTime(prev => prev - 1);
       }, 1000);
+  };
+
+  // Audio Alerts Effect
+  useEffect(() => {
+      if (timerState === 'INSPECTION') {
+          if (inspectionTime === 8) speak("Eight Seconds"); // 7s remaining (15-8=7? No, wait. 15-7=8 elapsed)
+          // Wait, logic was: next === 7 (8s elapsed). 
+          // If inspectionTime counts DOWN from 15:
+          // 15, 14, ... 8 (7s elapsed), 7 (8s elapsed).
+          // WCA rule: "8 seconds" call at 8s elapsed (7s remaining).
+          if (inspectionTime === 7) speak("Eight Seconds"); 
+          
+          // "12 seconds" call at 12s elapsed (3s remaining).
+          if (inspectionTime === 3) speak("Twelve Seconds");
+
+          // Penalties
+          if (inspectionTime === -1) setPenalty('+2'); // 16s elapsed
+          if (inspectionTime === -3) setPenalty('DNF'); // 18s elapsed
+      }
+  }, [inspectionTime, timerState]);
   };
 
   const stopInspection = () => {
