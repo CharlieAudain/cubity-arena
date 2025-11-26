@@ -17,6 +17,8 @@ const TimerView = ({ user, userData, onSolveComplete, dailyMode = false, recentS
   const [show2D, setShow2D] = useState(false);
   const [scramble, setScramble] = useState(forcedScramble || '');
   const [currentCubeState, setCurrentCubeState] = useState(null); // Live cube state
+  const [syncTrigger, setSyncTrigger] = useState(0); // Manual sync trigger
+  const [showSyncPrompt, setShowSyncPrompt] = useState(false);
   const timerRef = useRef(null);
   const startTimeRef = useRef(0);
 
@@ -24,6 +26,7 @@ const TimerView = ({ user, userData, onSolveComplete, dailyMode = false, recentS
   useEffect(() => {
     if (smartCube && smartCube.isConnected) {
         setShow2D(true); // Auto-show visualizer on connection
+        setShowSyncPrompt(true); // Show one-time sync prompt
         
         if (smartCube.lastMove && currentCubeState) {
             // Update live state on move
@@ -156,14 +159,27 @@ const TimerView = ({ user, userData, onSolveComplete, dailyMode = false, recentS
 
 
 
-        <div className="flex justify-center gap-4 mt-4">
+        <div className="flex justify-center gap-4 mt-4 items-center">
           {!dailyMode && !disableScrambleGen && <button onMouseUp={blurOnUI} onClick={resetTimer} className="text-slate-600 hover:text-white transition-colors"><RotateCcw className="w-5 h-5" /></button>}
           {(!smartCube || !smartCube.isConnected) && (
               <button onMouseUp={blurOnUI} onClick={() => setShow2D(!show2D)} className={`text-xs font-bold px-3 py-1 rounded-full border ${show2D ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'text-slate-600 border-white/5'}`}>
                 {show2D ? 'Hide Net' : 'Show Net'}
               </button>
           )}
+          {smartCube && smartCube.isConnected && (
+              <button onMouseUp={blurOnUI} onClick={() => setSyncTrigger(prev => prev + 1)} className="text-xs font-bold px-3 py-1 rounded-full border border-green-500/20 bg-green-500/10 text-green-400 hover:bg-green-500/20 transition-colors">
+                  Mark as Solved
+              </button>
+          )}
         </div>
+
+        {/* Sync Prompt */}
+        {showSyncPrompt && smartCube && smartCube.isConnected && (
+            <div className="absolute top-[-60px] left-1/2 transform -translate-x-1/2 bg-blue-600 text-white px-4 py-2 rounded-lg shadow-xl text-xs font-bold whitespace-nowrap z-50 flex items-center gap-3 animate-in fade-in slide-in-from-bottom-2">
+                <span>Please ensure your physical cube is solved to sync.</span>
+                <button onClick={() => setShowSyncPrompt(false)} className="bg-white/20 hover:bg-white/30 rounded px-2 py-0.5">OK</button>
+            </div>
+        )}
 
         {/* 3D CUBE (Main View) */}
         <div className="mt-4 relative z-10">
@@ -172,6 +188,7 @@ const TimerView = ({ user, userData, onSolveComplete, dailyMode = false, recentS
                 type={cubeType} 
                 customState={smartCube?.isConnected && smartCube?.lastMove ? smartCube.lastMove : null} 
                 isConnected={smartCube?.isConnected}
+                syncTrigger={syncTrigger}
             />
         </div>
 
