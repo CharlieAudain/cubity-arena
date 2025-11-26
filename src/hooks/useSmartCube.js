@@ -6,6 +6,7 @@ import { connectGanCube } from 'gan-web-bluetooth';
 export const useSmartCube = () => {
   const [isConnected, setIsConnected] = useState(false);
   const [deviceName, setDeviceName] = useState(null);
+  const [deviceMAC, setDeviceMAC] = useState(null);
   const [lastMove, setLastMove] = useState(null);
   const [facelets, setFacelets] = useState(null);
   const [error, setError] = useState(null);
@@ -16,6 +17,7 @@ export const useSmartCube = () => {
   const setupConnection = (conn) => {
       connRef.current = conn;
       setDeviceName(conn.deviceName || "GAN Cube");
+      setDeviceMAC(conn.deviceMAC);
       setIsConnected(true);
       setIsMacRequired(false); // Reset on success
 
@@ -34,7 +36,7 @@ export const useSmartCube = () => {
       });
   };
 
-  const connectCube = async () => {
+  const connectCube = async (savedMac = null) => {
     setError(null);
     setIsMacRequired(false);
     try {
@@ -49,12 +51,20 @@ export const useSmartCube = () => {
       console.error("Bluetooth Error:", err);
       // Check for specific MAC address error from library
       if (err.message && (err.message.includes("MAC") || err.message.includes("determine"))) {
-          setIsMacRequired(true);
-          setError("Browser cannot read MAC address. Please enter it manually.");
+          if (savedMac) {
+              console.log("Auto-retrying with saved MAC:", savedMac);
+              await retryWithMac(savedMac);
+          } else {
+              setIsMacRequired(true);
+              setError("Browser cannot read MAC address. Please enter it manually.");
+          }
       } else {
           setError(err.message || "Failed to connect");
       }
-      setIsConnected(false);
+      // Do not set isConnected(false) here if we are retrying, 
+      // but retryWithMac will handle success/fail.
+      // If we didn't retry, we are indeed disconnected/failed.
+      if (!savedMac) setIsConnected(false);
     }
   };
 
@@ -82,5 +92,5 @@ export const useSmartCube = () => {
     setIsMacRequired(false);
   };
 
-  return { isConnected, deviceName, connectCube, disconnectCube, lastMove, facelets, error, isMacRequired, retryWithMac };
+  return { isConnected, deviceName, deviceMAC, connectCube, disconnectCube, lastMove, facelets, error, isMacRequired, retryWithMac };
 };
