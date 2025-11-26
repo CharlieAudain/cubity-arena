@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Trophy, Swords, RotateCcw, Grid2x2, Box, Grid3x3 } from 'lucide-react';
 import { generateScramble, getDailySeed, getSolvedState, applyCubeMove, getInverseMove, simplifyMoveStack } from '../utils/cube';
 import { calculateAverage } from '../utils/stats';
-import ScrambleVisualizer from './ScrambleVisualizer';
 import SmartCube3D from './SmartCube3D';
 
 // --- UTILS: HELPER TO PREVENT FOCUS STEALING ---
@@ -14,24 +13,45 @@ const TimerView = ({ user, userData, onSolveComplete, dailyMode = false, recentS
   const [time, setTime] = useState(0);
   const [timerState, setTimerState] = useState('IDLE'); 
   const [cubeType, setCubeType] = useState('3x3'); 
-  const [show2D, setShow2D] = useState(false);
+  const [cubeType, setCubeType] = useState('3x3'); 
   const [scramble, setScramble] = useState(forcedScramble || '');
   const [currentCubeState, setCurrentCubeState] = useState(null); // Live cube state
   const [syncTrigger, setSyncTrigger] = useState(0); // Manual sync trigger
   const [showSyncPrompt, setShowSyncPrompt] = useState(false);
+  
+  // Inspection State
+  const [inspectionTime, setInspectionTime] = useState(15);
+  const [penalty, setPenalty] = useState(null); // null, '+2', 'DNF'
+  const inspectionIntervalRef = useRef(null);
+
+  // Scramble Tracking
+  const [scrambleIndex, setScrambleIndex] = useState(0);
+  const [scrambleMoves, setScrambleMoves] = useState([]);
+  const [correctionStack, setCorrectionStack] = useState([]); // Stack of moves to undo
+  const [partialMove, setPartialMove] = useState(null); // Track halfway state of double moves (e.g. "R" of "R2")
+
   const timerRef = useRef(null);
   const startTimeRef = useRef(0);
 
   // --- SMART CUBE INTEGRATION ---
   useEffect(() => {
     if (smartCube && smartCube.isConnected) {
-        setShow2D(true); // Auto-show visualizer on connection
+    if (smartCube && smartCube.isConnected) {
         setShowSyncPrompt(true); // Show one-time sync prompt
         
         if (smartCube.lastMove && currentCubeState) {
             // Update live state on move
             const newState = applyCubeMove(currentCubeState, smartCube.lastMove.move, cubeType);
             setCurrentCubeState(newState);
+            
+            // Check for Solved State (Auto-Stop)
+            if (timerState === 'RUNNING') {
+                const solvedState = getSolvedState(cubeType === '2x2' ? 2 : cubeType === '4x4' ? 4 : 3);
+                const isSolved = JSON.stringify(newState) === JSON.stringify(solvedState);
+                if (isSolved) {
+                    stopTimer();
+                }
+            }
         }
     }
   }, [smartCube?.isConnected, smartCube?.lastMove]);
@@ -119,10 +139,7 @@ const TimerView = ({ user, userData, onSolveComplete, dailyMode = false, recentS
     };
   }, [timerState, stopTimer, cubeType]); 
 
-  // Inspection State
-  const [inspectionTime, setInspectionTime] = useState(15);
-  const [penalty, setPenalty] = useState(null); // null, '+2', 'DNF'
-  const inspectionIntervalRef = useRef(null);
+
 
   // Audio Alerts
   const speak = (text) => {
@@ -223,11 +240,7 @@ const TimerView = ({ user, userData, onSolveComplete, dailyMode = false, recentS
     }
   };
 
-  // Scramble Tracking
-  const [scrambleIndex, setScrambleIndex] = useState(0);
-  const [scrambleMoves, setScrambleMoves] = useState([]);
-  const [correctionStack, setCorrectionStack] = useState([]); // Stack of moves to undo
-  const [partialMove, setPartialMove] = useState(null); // Track halfway state of double moves (e.g. "R" of "R2")
+
 
   useEffect(() => {
       if (scramble) {
@@ -262,6 +275,7 @@ const TimerView = ({ user, userData, onSolveComplete, dailyMode = false, recentS
           // Helper to check if move is the first half of a double move
           // e.g. target "R2", user "R" -> true. User "R'" -> true (since R' + R' = R2)
           const isPartialMatch = (target, user) => {
+              if (!target) return false; // Guard against undefined
               if (!target.includes("2")) return false;
               // Must be same face
               if (target[0] !== user[0]) return false;
@@ -344,9 +358,7 @@ const TimerView = ({ user, userData, onSolveComplete, dailyMode = false, recentS
                       </span>
                   );
               })}
-              {scrambleIndex === scrambleMoves.length && (
-                  <span className="text-green-400 font-bold ml-4 animate-pulse">SCRAMBLED!</span>
-              )}
+              })}
           </div>
       );
   };
@@ -381,11 +393,7 @@ const TimerView = ({ user, userData, onSolveComplete, dailyMode = false, recentS
 
         <div className="flex justify-center gap-4 mt-4 items-center">
           {!dailyMode && !disableScrambleGen && <button onMouseUp={blurOnUI} onClick={resetTimer} className="text-slate-600 hover:text-white transition-colors"><RotateCcw className="w-5 h-5" /></button>}
-          {(!smartCube || !smartCube.isConnected) && (
-              <button onMouseUp={blurOnUI} onClick={() => setShow2D(!show2D)} className={`text-xs font-bold px-3 py-1 rounded-full border ${show2D ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'text-slate-600 border-white/5'}`}>
-                {show2D ? 'Hide Net' : 'Show Net'}
-              </button>
-          )}
+
           {smartCube && smartCube.isConnected && (
               <button onMouseUp={blurOnUI} onClick={() => {
                   setSyncTrigger(prev => prev + 1);
@@ -416,13 +424,7 @@ const TimerView = ({ user, userData, onSolveComplete, dailyMode = false, recentS
         </div>
 
         {/* 2D NET (Optional Side View) */}
-        {show2D && (
-            <div className="absolute top-24 right-[-120px] hidden xl:block opacity-50 hover:opacity-100 transition-opacity">
-                 <ScrambleVisualizer scramble={scramble} type={cubeType} customState={currentCubeState} />
-            </div>
-        )}
-        {/* Mobile/Tablet 2D Fallback if needed, or just show below */}
-        {show2D && <div className="xl:hidden"><ScrambleVisualizer scramble={scramble} type={cubeType} customState={currentCubeState} /></div>}
+
       </div>
 
       <div className={`text-[6rem] md:text-[12rem] font-black font-mono tabular-nums leading-none tracking-tighter transition-colors duration-100 ${getTimerColor()}`}>
