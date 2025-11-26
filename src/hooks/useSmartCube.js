@@ -1,4 +1,6 @@
 import { useState, useRef } from 'react';
+import { connectGanCube } from 'gan-web-bluetooth';
+
 
 // --- HOOK: WEB BLUETOOTH SMART CUBE ---
 export const useSmartCube = () => {
@@ -6,50 +8,73 @@ export const useSmartCube = () => {
   const [deviceName, setDeviceName] = useState(null);
   const [lastMove, setLastMove] = useState(null);
   const [error, setError] = useState(null);
-  const deviceRef = useRef(null);
+  const [isMacRequired, setIsMacRequired] = useState(false); // New state
+  const connRef = useRef(null);
+  const subRef = useRef(null);
+
+  const setupConnection = (conn) => {
+      connRef.current = conn;
+      setDeviceName(conn.deviceName || "GAN Cube");
+      setIsConnected(true);
+      setIsMacRequired(false); // Reset on success
+
+      subRef.current = conn.events$.subscribe((event) => {
+        if (event.type === 'MOVE') {
+          setLastMove({ move: event.move, time: Date.now() });
+        }
+        if (event.type === 'DISCONNECT') {
+            setIsConnected(false);
+            setDeviceName(null);
+        }
+      });
+  };
 
   const connectCube = async () => {
     setError(null);
+    setIsMacRequired(false);
     try {
       if (!navigator.bluetooth) {
         throw new Error("Web Bluetooth is not supported in this browser.");
       }
 
-      // Request Bluetooth Device - Filter for common cube UUIDs if known, or allow all devices for now
-      // Note: GAN/GoCube have specific Service UUIDs. Using a generic approach for this demo.
-      // In production, you'd list specific services like: filters: [{ services: ['0000aadb-0000-1000-8000-00805f9b34fb'] }]
-      const device = await navigator.bluetooth.requestDevice({
-        acceptAllDevices: true,
-        optionalServices: ['0000180f-0000-1000-8000-00805f9b34fb'] // Battery service as example, usually cube services differ
-      });
-
-      const server = await device.gatt.connect();
-      deviceRef.current = device;
-      setDeviceName(device.name);
-      setIsConnected(true);
-      
-      device.addEventListener('gattserverdisconnected', () => {
-        setIsConnected(false);
-        setDeviceName(null);
-      });
-      
-      // NOTE: Real cube move parsing requires detailed protocol knowledge of GAN/GoCube.
-      // For this Unicorn MVP, we will simulate the "Connected" state enabling the timer.
-      // In a real implementation, we'd subscribe to characteristicvaluechanged here.
+      const conn = await connectGanCube();
+      setupConnection(conn);
 
     } catch (err) {
       console.error("Bluetooth Error:", err);
-      setError(err.message);
+      // Check for specific MAC address error from library
+      if (err.message && (err.message.includes("MAC") || err.message.includes("determine"))) {
+          setIsMacRequired(true);
+          setError("Browser cannot read MAC address. Please enter it manually.");
+      } else {
+          setError(err.message || "Failed to connect");
+      }
+      setIsConnected(false);
     }
+  };
+
+  const retryWithMac = async (macAddress) => {
+      setError(null);
+      try {
+          const conn = await connectGanCube(macAddress);
+          setupConnection(conn);
+      } catch (err) {
+          console.error("Retry Error:", err);
+          setError("Failed to connect with MAC: " + err.message);
+      }
   };
 
   const disconnectCube = () => {
-    if (deviceRef.current && deviceRef.current.gatt.connected) {
-      deviceRef.current.gatt.disconnect();
+    if (connRef.current) {
+      connRef.current.disconnect();
+    }
+    if (subRef.current) {
+        subRef.current.unsubscribe();
     }
     setIsConnected(false);
     setDeviceName(null);
+    setIsMacRequired(false);
   };
 
-  return { isConnected, deviceName, connectCube, disconnectCube, lastMove, error };
+  return { isConnected, deviceName, connectCube, disconnectCube, lastMove, error, isMacRequired, retryWithMac };
 };

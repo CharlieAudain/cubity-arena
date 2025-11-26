@@ -254,6 +254,47 @@ export default function App() {
         {error && <div className="mb-6 p-4 bg-red-900/20 border border-red-500/20 rounded-xl text-red-400">{error}</div>}
         {smartCube.error && <div className="mb-6 p-4 bg-orange-900/20 border border-orange-500/20 rounded-xl text-orange-400 flex items-center gap-2"><AlertCircle className="w-4 h-4"/> {smartCube.error}</div>}
 
+        {/* MAC Address Input Modal */}
+        {smartCube.isMacRequired && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+                <div className="bg-slate-900 border border-white/10 w-full max-w-md rounded-2xl shadow-2xl p-6">
+                    <h3 className="text-xl font-bold text-white mb-2">Enter Cube MAC Address</h3>
+                    <p className="text-slate-400 text-sm mb-4">
+                        Your browser cannot detect the cube's MAC address automatically. 
+                        Please enter it manually (e.g., <span className="font-mono text-white">AA:BB:CC:11:22:33</span>).
+                    </p>
+                    <form onSubmit={(e) => {
+                        e.preventDefault();
+                        const mac = e.target.mac.value.trim();
+                        if (mac) smartCube.retryWithMac(mac);
+                    }}>
+                        <input 
+                            name="mac" 
+                            type="text" 
+                            placeholder="XX:XX:XX:XX:XX:XX" 
+                            className="w-full bg-black/20 border border-white/10 rounded-lg px-4 py-3 text-white font-mono mb-4 focus:outline-none focus:border-blue-500"
+                            autoFocus
+                        />
+                        <div className="flex justify-end gap-3">
+                            <button 
+                                type="button" 
+                                onClick={smartCube.disconnectCube}
+                                className="px-4 py-2 text-slate-400 hover:text-white font-bold"
+                            >
+                                Cancel
+                            </button>
+                            <button 
+                                type="submit" 
+                                className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-2 rounded-lg font-bold"
+                            >
+                                Connect
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        )}
+
         {activeTab === 'stats' && user && <StatsView userId={user.uid} />}
         
         {activeTab === 'arena' && user && <ArenaView user={user} smartCube={smartCube} />}
