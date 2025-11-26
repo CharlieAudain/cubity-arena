@@ -94,7 +94,7 @@ const SmartCube3D = ({ scramble, type = '3x3', customState, onInit, isConnected,
   }, [customState]);
   
   return (
-    <div ref={containerRef} className="w-full h-48 md:h-80 flex items-center justify-center" />
+    <div ref={containerRef} className="w-full h-48 md:h-64 flex items-center justify-center" />
   );
 };
 
