@@ -218,7 +218,6 @@ const StatsView = ({ userId }) => {
       
       <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
         <button onMouseUp={blurOnUI} onClick={() => setFilterType('all')} className={`px-4 py-2 rounded-lg text-xs font-bold uppercase transition-colors ${filterType==='all' ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}>All</button>
-        <button onMouseUp={blurOnUI} onClick={() => setFilterType('3x3')} className={`px-4 py-2 rounded-lg text-xs font-bold uppercase transition-colors ${filterType==='3x3' ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}>3x3</button>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">

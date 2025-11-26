@@ -427,13 +427,7 @@ const TimerView = ({ user, userData, onSolveComplete, dailyMode = false, recentS
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
     >
-      <div className={`absolute top-0 right-0 transition-opacity ${timerState === 'RUNNING' ? 'opacity-0' : 'opacity-100'}`}>
-        {!dailyMode && !disableScrambleGen && !isBattle && (!smartCube || !smartCube.isConnected) && (
-          <div className="flex bg-slate-900 p-1 rounded-lg border border-white/10">
-            <button onMouseUp={blurOnUI} onClick={() => setCubeType('3x3')} className={`p-2 rounded ${cubeType==='3x3' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:text-white'}`}><Box className="w-4 h-4"/></button>
-          </div>
-        )}
-      </div>
+
 
       <div className={`text-center mb-8 transition-opacity duration-300 ${timerState === 'RUNNING' ? 'opacity-0' : 'opacity-100'} w-full mt-16 relative`}>
         <div className="flex items-center justify-center gap-2 mb-4 text-slate-500 text-xs font-bold uppercase tracking-widest">
