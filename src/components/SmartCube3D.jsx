@@ -21,6 +21,8 @@ const SmartCube3D = ({ scramble, type = '3x3', customState, onInit, isConnected 
       // Style it
       player.style.width = '100%';
       player.style.height = '100%';
+      player.setAttribute('control-panel', 'none');
+      player.setAttribute('background', 'none');
       
       containerRef.current.appendChild(player);
       playerRef.current = player;
