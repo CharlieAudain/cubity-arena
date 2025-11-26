@@ -46,7 +46,16 @@ const TimerView = ({ user, userData, onSolveComplete, dailyMode = false, recentS
             if (timerState === 'RUNNING') {
                 const solvedState = getSolvedState(cubeType === '2x2' ? 2 : cubeType === '4x4' ? 4 : 3);
                 const isSolved = JSON.stringify(newState) === JSON.stringify(solvedState);
+                
+                console.log("Auto-Stop Check:", { 
+                    isSolved, 
+                    timerState, 
+                    moves: smartCube.lastMove.move,
+                    stateMatch: JSON.stringify(newState) === JSON.stringify(solvedState)
+                });
+
                 if (isSolved) {
+                    console.log("Cube Solved! Stopping Timer.");
                     stopTimer();
                 }
             }
@@ -424,7 +433,19 @@ const TimerView = ({ user, userData, onSolveComplete, dailyMode = false, recentS
 
       </div>
 
-      <div className={`text-[6rem] md:text-[12rem] font-black font-mono tabular-nums leading-none tracking-tighter transition-colors duration-100 ${getTimerColor()}`}>
+      <div className={`text-[6rem] md:text-[12rem] font-black font-mono tabular-nums leading-none tracking-tighter transition-colors duration-100 ${getTimerColor()} flex flex-col items-center`}>
+        {/* State Label */}
+        {timerState === 'INSPECTION' && (
+            <div className="text-sm md:text-base font-bold tracking-[0.5em] text-orange-500 mb-[-1rem] animate-pulse">
+                INSPECTION
+            </div>
+        )}
+        {timerState === 'RUNNING' && (
+            <div className="text-sm md:text-base font-bold tracking-[0.5em] text-green-500/50 mb-[-1rem]">
+                SOLVING
+            </div>
+        )}
+
         {timerState === 'INSPECTION' ? (
             <span className={`${inspectionTime < 0 ? 'text-red-500' : 'text-orange-400'}`}>
                 {Math.abs(inspectionTime)}
