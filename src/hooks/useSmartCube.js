@@ -7,6 +7,7 @@ export const useSmartCube = () => {
   const [isConnected, setIsConnected] = useState(false);
   const [deviceName, setDeviceName] = useState(null);
   const [lastMove, setLastMove] = useState(null);
+  const [facelets, setFacelets] = useState(null);
   const [error, setError] = useState(null);
   const [isMacRequired, setIsMacRequired] = useState(false); // New state
   const connRef = useRef(null);
@@ -22,9 +23,13 @@ export const useSmartCube = () => {
         if (event.type === 'MOVE') {
           setLastMove({ move: event.move, time: Date.now() });
         }
+        if (event.type === 'FACELETS') {
+            setFacelets(event.facelets);
+        }
         if (event.type === 'DISCONNECT') {
             setIsConnected(false);
             setDeviceName(null);
+            setFacelets(null);
         }
       });
   };
@@ -77,5 +82,5 @@ export const useSmartCube = () => {
     setIsMacRequired(false);
   };
 
-  return { isConnected, deviceName, connectCube, disconnectCube, lastMove, error, isMacRequired, retryWithMac };
+  return { isConnected, deviceName, connectCube, disconnectCube, lastMove, facelets, error, isMacRequired, retryWithMac };
 };
