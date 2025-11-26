@@ -93,5 +93,24 @@ export const useSmartCube = () => {
     setIsMacRequired(false);
   };
 
-  return { isConnected, deviceName, deviceMAC, connectCube, disconnectCube, lastMove, facelets, error, isMacRequired, retryWithMac };
+  const connectMockCube = () => {
+      setIsConnected(true);
+      setDeviceName("Mock Cube");
+      setDeviceMAC("MOCK-00-00");
+      
+      // Simulate random moves
+      const moves = ["R", "R'", "L", "L'", "U", "U'", "D", "D'", "F", "F'", "B", "B'"];
+      const interval = setInterval(() => {
+          const randomMove = moves[Math.floor(Math.random() * moves.length)];
+          setLastMove({ move: randomMove, time: Date.now() });
+      }, 1500);
+
+      // Store interval to clear on disconnect
+      connRef.current = { 
+          disconnect: () => clearInterval(interval),
+          deviceName: "Mock Cube"
+      };
+  };
+
+  return { isConnected, deviceName, deviceMAC, connectCube, disconnectCube, connectMockCube, lastMove, facelets, error, isMacRequired, retryWithMac };
 };

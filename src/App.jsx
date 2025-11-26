@@ -240,6 +240,17 @@ export default function App() {
           >
             <Bluetooth className="w-4 h-4" /> {smartCube.isConnected ? 'Connected' : 'Connect Cube'}
           </button>
+          
+          {/* MOCK CONNECT (Dev Only) */}
+          {!smartCube.isConnected && (
+              <button 
+                  onClick={smartCube.connectMockCube}
+                  className="mr-4 px-2 py-1 rounded text-[10px] font-bold uppercase text-slate-600 hover:text-white hover:bg-white/10 transition-colors"
+                  title="Connect Mock Cube"
+              >
+                  Mock
+              </button>
+          )}
 
           {user ? (
             <div className="relative group z-50 inline-block">
