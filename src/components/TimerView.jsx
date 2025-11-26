@@ -25,6 +25,12 @@ const TimerView = ({ user, userData, onSolveComplete, dailyMode = false, recentS
   const [penalty, setPenalty] = useState(null); // null, '+2', 'DNF'
   const inspectionIntervalRef = useRef(null);
 
+  // Scramble Tracking
+  const [scrambleIndex, setScrambleIndex] = useState(0);
+  const [scrambleMoves, setScrambleMoves] = useState([]);
+  const [correctionStack, setCorrectionStack] = useState([]); // Stack of moves to undo
+  const [partialMove, setPartialMove] = useState(null); // Track halfway state of double moves (e.g. "R" of "R2")
+
   const timerRef = useRef(null);
   const startTimeRef = useRef(0);
 
@@ -38,6 +44,15 @@ const TimerView = ({ user, userData, onSolveComplete, dailyMode = false, recentS
             // Update live state on move
             const newState = applyCubeMove(currentCubeState, smartCube.lastMove.move, cubeType);
             setCurrentCubeState(newState);
+            
+            // Check for Solved State (Auto-Stop)
+            if (timerState === 'RUNNING') {
+                const solvedState = getSolvedState(cubeType === '2x2' ? 2 : cubeType === '4x4' ? 4 : 3);
+                const isSolved = JSON.stringify(newState) === JSON.stringify(solvedState);
+                if (isSolved) {
+                    stopTimer();
+                }
+            }
         }
     }
   }, [smartCube?.isConnected, smartCube?.lastMove]);
@@ -226,11 +241,7 @@ const TimerView = ({ user, userData, onSolveComplete, dailyMode = false, recentS
     }
   };
 
-  // Scramble Tracking
-  const [scrambleIndex, setScrambleIndex] = useState(0);
-  const [scrambleMoves, setScrambleMoves] = useState([]);
-  const [correctionStack, setCorrectionStack] = useState([]); // Stack of moves to undo
-  const [partialMove, setPartialMove] = useState(null); // Track halfway state of double moves (e.g. "R" of "R2")
+
 
   useEffect(() => {
       if (scramble) {
@@ -265,6 +276,7 @@ const TimerView = ({ user, userData, onSolveComplete, dailyMode = false, recentS
           // Helper to check if move is the first half of a double move
           // e.g. target "R2", user "R" -> true. User "R'" -> true (since R' + R' = R2)
           const isPartialMatch = (target, user) => {
+              if (!target) return false; // Guard against undefined
               if (!target.includes("2")) return false;
               // Must be same face
               if (target[0] !== user[0]) return false;
