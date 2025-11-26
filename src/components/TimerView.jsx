@@ -22,6 +22,7 @@ const TimerView = ({ user, userData, onSolveComplete, dailyMode = false, recentS
   const [inspectionTime, setInspectionTime] = useState(15);
   const [penalty, setPenalty] = useState(null); // null, '+2', 'DNF'
   const inspectionIntervalRef = useRef(null);
+  const lastMoveAtInspectionStart = useRef(null); // Track move that started inspection
 
   // Scramble Tracking
   const [scrambleIndex, setScrambleIndex] = useState(0);
@@ -147,10 +148,7 @@ const TimerView = ({ user, userData, onSolveComplete, dailyMode = false, recentS
 
 
   // Inspection State
-  const [inspectionTime, setInspectionTime] = useState(15);
-  const [penalty, setPenalty] = useState(null); // null, '+2', 'DNF'
-  const inspectionIntervalRef = useRef(null);
-  const lastMoveAtInspectionStart = useRef(null); // Track move that started inspection
+  // (State declared at top of component)
 
   // Audio Alerts
   const speak = (text) => {
