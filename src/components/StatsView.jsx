@@ -1,3 +1,4 @@
+import React, { useState, useEffect } from 'react';
 import { 
   X, Trash2, Calendar, Box, TrendingUp, Grid2x2, Grid3x3, ChevronRight, Play, Pause, SkipBack, SkipForward 
 } from 'lucide-react';
