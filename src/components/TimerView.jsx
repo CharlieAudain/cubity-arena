@@ -13,7 +13,6 @@ const TimerView = ({ user, userData, onSolveComplete, dailyMode = false, recentS
   const [time, setTime] = useState(0);
   const [timerState, setTimerState] = useState('IDLE'); 
   const [cubeType, setCubeType] = useState('3x3'); 
-  const [cubeType, setCubeType] = useState('3x3'); 
   const [scramble, setScramble] = useState(forcedScramble || '');
   const [currentCubeState, setCurrentCubeState] = useState(null); // Live cube state
   const [syncTrigger, setSyncTrigger] = useState(0); // Manual sync trigger
@@ -35,7 +34,6 @@ const TimerView = ({ user, userData, onSolveComplete, dailyMode = false, recentS
 
   // --- SMART CUBE INTEGRATION ---
   useEffect(() => {
-    if (smartCube && smartCube.isConnected) {
     if (smartCube && smartCube.isConnected) {
         setShowSyncPrompt(true); // Show one-time sync prompt
         
@@ -357,7 +355,6 @@ const TimerView = ({ user, userData, onSolveComplete, dailyMode = false, recentS
                           {move}
                       </span>
                   );
-              })}
               })}
           </div>
       );
