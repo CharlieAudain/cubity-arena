@@ -72,8 +72,16 @@ export const useSmartCube = () => {
   const retryWithMac = async (macAddress) => {
       setError(null);
       try {
-          // connectGanCube expects a provider function, not a string
-          const conn = await connectGanCube(async () => macAddress);
+          // Sanitize MAC: Remove colons, dashes, spaces, ensure uppercase
+          const cleanMac = macAddress.replace(/[^a-fA-F0-9]/g, '').toUpperCase();
+          console.log("Retrying with sanitized MAC:", cleanMac);
+
+          if (cleanMac.length !== 12) {
+              throw new Error(`Invalid MAC length: ${cleanMac.length} chars (expected 12 hex chars)`);
+          }
+
+          // connectGanCube expects a provider function
+          const conn = await connectGanCube(async () => cleanMac);
           setupConnection(conn);
       } catch (err) {
           console.error("Retry Error:", err);
@@ -93,5 +101,24 @@ export const useSmartCube = () => {
     setIsMacRequired(false);
   };
 
-  return { isConnected, deviceName, deviceMAC, connectCube, disconnectCube, lastMove, facelets, error, isMacRequired, retryWithMac };
+  const connectMockCube = () => {
+      setIsConnected(true);
+      setDeviceName("Mock Cube");
+      setDeviceMAC("MOCK-00-00");
+      
+      // Simulate random moves
+      const moves = ["R", "R'", "L", "L'", "U", "U'", "D", "D'", "F", "F'", "B", "B'"];
+      const interval = setInterval(() => {
+          const randomMove = moves[Math.floor(Math.random() * moves.length)];
+          setLastMove({ move: randomMove, time: Date.now() });
+      }, 1500);
+
+      // Store interval to clear on disconnect
+      connRef.current = { 
+          disconnect: () => clearInterval(interval),
+          deviceName: "Mock Cube"
+      };
+  };
+
+  return { isConnected, deviceName, deviceMAC, connectCube, disconnectCube, connectMockCube, lastMove, facelets, error, isMacRequired, retryWithMac };
 };

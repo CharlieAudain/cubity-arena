@@ -9,114 +9,16 @@ const blurOnUI = (e) => {
   e.currentTarget.blur();
 };
 
-// --- SUB-COMPONENT: BATTLE ROOM ---
-const BattleRoom = ({ user, roomData, roomId, onExit, smartCube }) => {
-    const [myTime, setMyTime] = useState(null);
-    const [opponentTime, setOpponentTime] = useState(null);
-    const [result, setResult] = useState(null); 
-
-    const amIPlayer1 = user.uid === roomData.player1.uid;
-    const opponentName = amIPlayer1 ? roomData.player2?.name : roomData.player1.name;
-    const myResultField = amIPlayer1 ? 'result1' : 'result2';
-    const opResultField = amIPlayer1 ? 'result2' : 'result1';
-
-    useEffect(() => {
-        const myRes = roomData[myResultField];
-        const opRes = roomData[opResultField];
-        
-        if (myRes) setMyTime(myRes);
-        if (opRes) setOpponentTime(opRes);
-
-        if (myRes && opRes) {
-            if (myRes < opRes) setResult('win');
-            else if (myRes > opRes) setResult('loss');
-            else setResult('draw');
-        }
-    }, [roomData, myResultField, opResultField]);
-
-    const onBattleSolveComplete = async (time) => {
-        const roomRef = doc(db, 'artifacts', 'cubity-v1', 'public', 'data', 'rooms', roomId);
-        await updateDoc(roomRef, {
-            [myResultField]: parseFloat(time)
-        });
-    };
-
-    return (
-        <div className="w-full max-w-3xl mx-auto">
-            <div className="flex justify-between items-center mb-8 p-4 bg-slate-900/50 border border-white/10 rounded-xl">
-                <div className="flex items-center gap-3">
-                    <div className="text-right">
-                        <div className="text-xs text-slate-500 font-bold uppercase">YOU</div>
-                        <div className="text-white font-bold">{user.displayName || 'Guest'}</div>
-                    </div>
-                </div>
-                <div className="text-2xl font-black italic text-slate-700">VS</div>
-                <div className="flex items-center gap-3">
-                    <div className="text-left">
-                        <div className="text-xs text-slate-500 font-bold uppercase">OPPONENT</div>
-                        <div className="text-white font-bold">{opponentName || 'Connecting...'}</div>
-                    </div>
-                </div>
-            </div>
-
-            {!myTime ? (
-                <div className="mb-8">
-                    <div className="text-center mb-4 text-indigo-400 text-xs font-bold uppercase tracking-widest flex items-center justify-center gap-2">
-                        <Swords className="w-4 h-4" /> BATTLE SCRAMBLE
-                    </div>
-                    <TimerView 
-                        user={user} 
-                        userData={{}} 
-                        onSolveComplete={onBattleSolveComplete} 
-                        dailyMode={false} 
-                        isBattle={true}
-                        forcedScramble={roomData.scramble}
-                        forcedType={roomData.type || '3x3'}
-                        disableScrambleGen={true}
-                        smartCube={smartCube} 
-                    />
-                </div>
-            ) : (
-                <div className="text-center py-12 animate-in zoom-in duration-300">
-                    {result ? (
-                        <>
-                            {result === 'win' && <Crown className="w-20 h-20 text-yellow-500 mx-auto mb-4" />}
-                            {result === 'loss' && <Frown className="w-20 h-20 text-slate-500 mx-auto mb-4" />}
-                            <h1 className="text-5xl font-black italic text-white mb-2">
-                                {result === 'win' ? 'VICTORY!' : result === 'loss' ? 'DEFEAT' : 'DRAW'}
-                            </h1>
-                            <div className="flex justify-center gap-8 mt-8">
-                                <div>
-                                    <div className="text-xs text-slate-500 uppercase font-bold">You</div>
-                                    <div className="text-3xl font-mono text-white">{myTime}s</div>
-                                </div>
-                                <div>
-                                    <div className="text-xs text-slate-500 uppercase font-bold">{opponentName}</div>
-                                    <div className="text-3xl font-mono text-white">{opponentTime}s</div>
-                                </div>
-                            </div>
-                        </>
-                    ) : (
-                        <>
-                            <Activity className="w-16 h-16 text-blue-500 animate-pulse mx-auto mb-4" />
-                            <h2 className="text-2xl font-bold text-white">Waiting for opponent...</h2>
-                            <p className="text-slate-500 mt-2">You finished in {myTime}s</p>
-                        </>
-                    )}
-                    {result && (
-                        <button onClick={onExit} className="mt-12 bg-slate-800 hover:bg-slate-700 text-white px-8 py-3 rounded-xl font-bold transition-colors">
-                            Leave Match
-                        </button>
-                    )}
-                </div>
-            )}
-        </div>
-    );
-};
+import BattleRoom from './BattleRoom';
 
 const ArenaView = ({ user, smartCube }) => {
   const { status, roomId, roomData, findMatch, cancelSearch, error } = useMatchmaking(user);
-  const [queueType, setQueueType] = useState('3x3'); 
+
+  const [debugRoom, setDebugRoom] = useState(null);
+
+  if (debugRoom) {
+      return <BattleRoom user={user} roomData={debugRoom} roomId={debugRoom.id} onExit={() => setDebugRoom(null)} smartCube={smartCube} />;
+  }
 
   if (status === 'found' && roomData) {
       return <BattleRoom user={user} roomData={roomData} roomId={roomId} onExit={cancelSearch} smartCube={smartCube} />;
@@ -131,16 +33,38 @@ const ArenaView = ({ user, smartCube }) => {
           </div>
           <h2 className="text-3xl font-black italic text-white mb-2 tracking-tight">THE ARENA</h2>
           <p className="text-slate-400 max-w-md mb-8">Race against cubers worldwide in real-time. 1v1 Ranked Battles.</p>
-          <div className="flex bg-slate-900 p-1 rounded-lg border border-white/10 mb-8">
-            <button onMouseUp={blurOnUI} onClick={() => setQueueType('2x2')} className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors ${queueType==='2x2' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:text-white'}`}>2x2</button>
-            <button onMouseUp={blurOnUI} onClick={() => setQueueType('3x3')} className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors ${queueType==='3x3' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:text-white'}`}>3x3</button>
-            <button onMouseUp={blurOnUI} onClick={() => setQueueType('4x4')} className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors ${queueType==='4x4' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:text-white'}`}>4x4</button>
-          </div>
           <div className="flex flex-col gap-3 w-full max-w-xs">
-            <button onClick={() => findMatch(queueType)} className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-4 rounded-xl font-bold shadow-lg shadow-blue-500/25 flex items-center justify-center gap-2 transition-all active:scale-95">
-              <Swords className="w-5 h-5" /> FIND MATCH ({queueType})
+            <button onClick={() => findMatch('3x3')} className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-4 rounded-xl font-bold shadow-lg shadow-blue-500/25 flex items-center justify-center gap-2 transition-all active:scale-95">
+              <Swords className="w-5 h-5" /> FIND MATCH
             </button>
             {error && <p className="text-red-400 text-xs mt-2">{error}</p>}
+            
+            <div className="flex gap-2">
+                <button onClick={() => {
+                    setDebugRoom({
+                        id: 'debug-room-1',
+                        player1: { uid: user?.uid || 'p1', name: 'Host (P1)' },
+                        player2: { uid: 'other', name: 'Guest (P2)' },
+                        scramble: "R U R' U' R U R' U' R U R' U'",
+                        type: '3x3',
+                        isHost: true
+                    });
+                }} className="flex-1 mt-4 bg-slate-800 text-slate-500 text-[10px] px-2 py-2 rounded-lg font-mono hover:text-white hover:bg-slate-700 transition-colors">
+                    DEBUG: ENTER AS P1
+                </button>
+                <button onClick={() => {
+                    setDebugRoom({
+                        id: 'debug-room-1',
+                        player1: { uid: 'other', name: 'Host (P1)' },
+                        player2: { uid: user?.uid || 'p2', name: 'Guest (P2)' },
+                        scramble: "R U R' U' R U R' U' R U R' U'",
+                        type: '3x3',
+                        isHost: false
+                    });
+                }} className="flex-1 mt-4 bg-slate-800 text-slate-500 text-[10px] px-2 py-2 rounded-lg font-mono hover:text-white hover:bg-slate-700 transition-colors">
+                    DEBUG: ENTER AS P2
+                </button>
+            </div>
           </div>
         </>
       )}
@@ -153,7 +77,7 @@ const ArenaView = ({ user, smartCube }) => {
             <div className="absolute inset-0 rounded-full border-4 border-blue-500/20 animate-ping"></div>
           </div>
           <h2 className="text-2xl font-bold text-white mb-2">Searching for opponent...</h2>
-          <p className="text-slate-500 text-sm mb-8">Queue: {queueType}</p>
+          <p className="text-slate-500 text-sm mb-8">Queue: 3x3</p>
           <button onClick={cancelSearch} className="text-slate-400 hover:text-white text-sm font-bold uppercase tracking-wider border border-white/10 px-6 py-2 rounded-full">
             Cancel
           </button>

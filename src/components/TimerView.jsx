@@ -9,7 +9,20 @@ const blurOnUI = (e) => {
   e.currentTarget.blur();
 };
 
-const TimerView = ({ user, userData, onSolveComplete, dailyMode = false, recentSolves = [], forcedScramble = null, forcedType = null, disableScrambleGen = false, isBattle = false, smartCube }) => {
+const TimerView = ({ 
+  user, 
+  userData, 
+  onSolveComplete, 
+  dailyMode = false, 
+  recentSolves = [], 
+  forcedScramble = null, 
+  forcedType = null, 
+  disableScrambleGen = false, 
+  isBattle = false, 
+  smartCube = null,
+  onMove = null,        // NEW: Callback for every move
+  onStatusChange = null // NEW: Callback for status changes
+}) => {
   const [time, setTime] = useState(0);
   const [timerState, setTimerState] = useState('IDLE'); 
   const [cubeType, setCubeType] = useState('3x3'); 
@@ -39,6 +52,11 @@ const TimerView = ({ user, userData, onSolveComplete, dailyMode = false, recentS
   const timerRef = useRef(null);
   const startTimeRef = useRef(0);
 
+  // Notify parent of status changes
+  useEffect(() => {
+      if (onStatusChange) onStatusChange(timerState);
+  }, [timerState, onStatusChange]);
+
   // --- SMART CUBE INTEGRATION ---
   useEffect(() => {
     if (smartCube && smartCube.isConnected) {
@@ -52,6 +70,9 @@ const TimerView = ({ user, userData, onSolveComplete, dailyMode = false, recentS
             const newState = applyCubeMove(currentCubeState, smartCube.lastMove.move, cubeType);
             setCurrentCubeState(newState);
             
+            // Notify Parent (BattleRoom)
+            if (onMove) onMove(smartCube.lastMove.move);
+
             // Track Solution Moves
             if (timerState === 'RUNNING') {
                 setSolutionMoves(prev => [...prev, smartCube.lastMove.move]);
@@ -93,6 +114,36 @@ const TimerView = ({ user, userData, onSolveComplete, dailyMode = false, recentS
     }
   }, [cubeType, dailyMode, disableScrambleGen, forcedScramble]);
 
+  // Mock Social Feed
+  useEffect(() => {
+      const interval = setInterval(() => {
+          if (Math.random() > 0.7) { // 30% chance every 10s
+              const names = ["Alex", "Sarah", "Mike", "Emma", "David", "Lisa"];
+              const name = names[Math.floor(Math.random() * names.length)];
+              const time = (Math.random() * 10 + 5).toFixed(2);
+              
+              const newLog = {
+                  id: Date.now(),
+                  type: 'SOCIAL',
+                  message: `${name} got a NEW PB: ${time}s!`,
+                  isSmart: true // Treat as relevant content
+              };
+              setActivityLog(prev => [newLog, ...prev].slice(0, 20));
+              
+              // Trigger fade out after 7s
+              setTimeout(() => {
+                  setActivityLog(prev => prev.map(l => l.id === newLog.id ? { ...l, isFading: true } : l));
+              }, 7000);
+
+              // Remove after 8s
+              setTimeout(() => {
+                  setActivityLog(prev => prev.filter(l => l.id !== newLog.id));
+              }, 8000);
+          }
+      }, 8000);
+      return () => clearInterval(interval);
+  }, []);
+
   const ao5 = calculateAverage(recentSolves, 5);
   const ao12 = calculateAverage(recentSolves, 12);
   
@@ -131,14 +182,30 @@ const TimerView = ({ user, userData, onSolveComplete, dailyMode = false, recentS
         else if (finalTime > numAo5 * 1.15) grade = '??';
     }
 
-    // Add to Activity Feed
-    const newLog = { id: Date.now(), time: finalTime, grade, penalty };
-    setActivityLog(prev => [newLog, ...prev]);
-    
-    // Auto-remove after 5s
-    setTimeout(() => {
-        setActivityLog(prev => prev.filter(l => l.id !== newLog.id));
-    }, 5000);
+    // Add to Activity Feed (Only if Smart Cube)
+    if (smartCube?.isConnected) {
+        const newLog = { 
+            id: Date.now(), 
+            type: 'SOLVE',
+            time: finalTime, 
+            grade, 
+            penalty,
+            isSmart: true 
+        };
+        setActivityLog(prev => [newLog, ...prev].slice(0, 20)); // Keep last 20
+        
+        // Trigger fade out after 7s
+        setTimeout(() => {
+            setActivityLog(prev => prev.map(l => l.id === newLog.id ? { ...l, isFading: true } : l));
+        }, 7000);
+
+        // Remove after 8s
+        setTimeout(() => {
+            setActivityLog(prev => prev.filter(l => l.id !== newLog.id));
+        }, 8000);
+    }
+
+    // Construct Detailed Data
 
     // Construct Detailed Data
     const detailedData = {
@@ -158,6 +225,7 @@ const TimerView = ({ user, userData, onSolveComplete, dailyMode = false, recentS
 
   useEffect(() => {
     const handleKeyDown = (e) => {
+      if (smartCube?.isConnected) return; // Disable manual controls if smart cube connected
       if (e.code === 'Space') {
         e.preventDefault(); 
         if (timerState === 'IDLE' || timerState === 'STOPPED') {
@@ -168,6 +236,7 @@ const TimerView = ({ user, userData, onSolveComplete, dailyMode = false, recentS
       }
     };
     const handleKeyUp = (e) => {
+      if (smartCube?.isConnected) return; // Disable manual controls if smart cube connected
       if (e.code === 'Space') {
         if (timerState === 'READY') startTimer();
         else if (timerState === 'HOLDING') setTimerState('IDLE'); 
@@ -179,7 +248,7 @@ const TimerView = ({ user, userData, onSolveComplete, dailyMode = false, recentS
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [timerState, stopTimer, cubeType]); 
+  }, [timerState, stopTimer, cubeType, smartCube?.isConnected]); 
 
 
 
@@ -264,6 +333,7 @@ const TimerView = ({ user, userData, onSolveComplete, dailyMode = false, recentS
   }, []);
 
   const handleTouchStart = () => {
+    if (smartCube?.isConnected) return; // Disable manual controls
     if (timerState === 'IDLE' || timerState === 'STOPPED') {
       if (timerState === 'STOPPED') resetTimer();
       setTimerState('HOLDING');
@@ -279,6 +349,7 @@ const TimerView = ({ user, userData, onSolveComplete, dailyMode = false, recentS
   };
 
   const handleTouchEnd = () => {
+    if (smartCube?.isConnected) return; // Disable manual controls
     if (timerState === 'READY') startTimer();
     else if (timerState === 'HOLDING') {
         // If they let go too early during inspection, resume inspection?
@@ -427,19 +498,11 @@ const TimerView = ({ user, userData, onSolveComplete, dailyMode = false, recentS
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
     >
-      <div className={`absolute top-0 right-0 transition-opacity ${timerState === 'RUNNING' ? 'opacity-0' : 'opacity-100'}`}>
-        {!dailyMode && !disableScrambleGen && !isBattle && (!smartCube || !smartCube.isConnected) && (
-          <div className="flex bg-slate-900 p-1 rounded-lg border border-white/10">
-            <button onMouseUp={blurOnUI} onClick={() => setCubeType('2x2')} className={`p-2 rounded ${cubeType==='2x2' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:text-white'}`}><Grid2x2 className="w-4 h-4"/></button>
-            <button onMouseUp={blurOnUI} onClick={() => setCubeType('3x3')} className={`p-2 rounded ${cubeType==='3x3' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:text-white'}`}><Box className="w-4 h-4"/></button>
-            <button onMouseUp={blurOnUI} onClick={() => setCubeType('4x4')} className={`p-2 rounded ${cubeType==='4x4' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:text-white'}`}><Grid3x3 className="w-4 h-4"/></button>
-          </div>
-        )}
-      </div>
+
 
       <div className={`text-center mb-8 transition-opacity duration-300 ${timerState === 'RUNNING' ? 'opacity-0' : 'opacity-100'} w-full mt-16 relative`}>
         <div className="flex items-center justify-center gap-2 mb-4 text-slate-500 text-xs font-bold uppercase tracking-widest">
-          {dailyMode ? <span className="text-indigo-400 flex gap-2 items-center"><Trophy className="w-4 h-4" /> DAILY CHALLENGE</span> : <><Swords className="w-4 h-4" /> {cubeType} Scramble</>}
+          {dailyMode ? <span className="text-indigo-400 flex gap-2 items-center"><Trophy className="w-4 h-4" /> DAILY CHALLENGE</span> : !isBattle && <><Swords className="w-4 h-4" /> {cubeType} Scramble</>}
         </div>
         <div className="text-xl md:text-3xl font-mono font-medium text-slate-300 max-w-3xl leading-relaxed px-4 text-center mx-auto min-h-[3rem] flex items-center justify-center">
           {renderScramble()}
@@ -545,22 +608,41 @@ const TimerView = ({ user, userData, onSolveComplete, dailyMode = false, recentS
       )}
 
       <div className={`absolute bottom-[-3rem] md:bottom-[-4rem] text-slate-600 text-xs font-bold tracking-widest uppercase animate-pulse ${timerState === 'RUNNING' ? 'hidden' : 'block'}`}>
-        {timerState === 'STOPPED' ? 'Press Space to Reset' : 'Hold Space / Touch / Turn to Start'}
+        {smartCube?.isConnected 
+            ? (timerState === 'STOPPED' ? 'Press Reset Button' : 'Turn Cube to Start') 
+            : (timerState === 'STOPPED' ? 'Press Space to Reset' : 'Hold Space / Touch / Turn to Start')}
       </div>
       <div className="absolute bottom-[-5rem] text-slate-800 text-[10px] font-mono">v1.1 (Auto-Stop Fix)</div>
 
       {/* Activity Feed */}
-      <div className="absolute bottom-4 left-4 flex flex-col-reverse gap-2 pointer-events-none">
+      <div className="fixed top-20 left-4 right-4 md:top-auto md:bottom-4 md:left-4 md:right-auto md:w-72 flex flex-col md:flex-col-reverse gap-2 pointer-events-none z-50">
           {activityLog.map(log => (
-              <div key={log.id} className="bg-slate-900/80 backdrop-blur border border-white/10 p-3 rounded-lg shadow-xl animate-in slide-in-from-bottom-4 fade-in duration-300 flex items-center gap-3">
-                  <div className="text-2xl font-mono font-bold text-white">
-                      {log.time.toFixed(2)}
-                      {log.penalty && <span className="text-red-500 text-sm ml-1">{log.penalty}</span>}
-                  </div>
-                  {log.grade && (
-                      <div className={`text-xl font-black italic ${log.grade === '!!' ? 'text-green-400' : 'text-red-400'}`}>
-                          {log.grade}
+              <div key={log.id} className={`
+                  backdrop-blur border p-4 rounded-xl shadow-2xl flex items-center gap-4 transition-all
+                  ${log.isFading ? 'animate-out fade-out slide-out-to-top-10 duration-1000' : 'animate-in slide-in-from-top-10 md:slide-in-from-bottom-10 fade-in duration-500'}
+                  ${log.type === 'SOCIAL' ? 'bg-blue-950/80 border-blue-500/30' : 'bg-slate-900/90 border-white/10'}
+              `}>
+                  {log.type === 'SOCIAL' ? (
+                      <div className="flex items-center gap-3">
+                          <div className="bg-blue-500/20 p-2 rounded-full">
+                              <Trophy className="w-4 h-4 text-blue-400" />
+                          </div>
+                          <div className="text-xs font-bold text-blue-200">
+                              {log.message}
+                          </div>
                       </div>
+                  ) : (
+                      <>
+                        <div className="text-2xl font-mono font-bold text-white">
+                            {log.time.toFixed(2)}
+                            {log.penalty && <span className="text-red-500 text-sm ml-1">{log.penalty}</span>}
+                        </div>
+                        {log.grade && (
+                            <div className={`text-xl font-black italic ${log.grade === '!!' ? 'text-green-400' : 'text-red-400'}`}>
+                                {log.grade}
+                            </div>
+                        )}
+                      </>
                   )}
               </div>
           ))}

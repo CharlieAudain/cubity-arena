@@ -124,18 +124,7 @@ const StatsView = ({ userId }) => {
     : "--";
   const formatDate = (isoString) => new Date(isoString).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 
-  const togglePenalty = async (type) => {
-    if (!selectedSolve || !userId) return;
-    let newPenalty = 0;
-    if (type === '2') newPenalty = selectedSolve.penalty === 2 ? 0 : 2;
-    else if (type === 'DNF') newPenalty = selectedSolve.penalty === 'DNF' ? 0 : 'DNF';
-    
-    setSelectedSolve(prev => ({ ...prev, penalty: newPenalty }));
-    try {
-      const solveRef = doc(db, 'artifacts', 'cubity-v1', 'users', userId, 'solves', selectedSolve.id);
-      await updateDoc(solveRef, { penalty: newPenalty });
-    } catch (err) { console.error("Penalty update failed", err); }
-  };
+
 
   const deleteSolve = async () => {
     if (!selectedSolve || !userId) return;
@@ -161,10 +150,7 @@ const StatsView = ({ userId }) => {
               <button onClick={() => setSelectedSolve(null)} onMouseUp={blurOnUI} className="p-2 bg-white/5 rounded-full hover:bg-white/10 text-slate-400 hover:text-white"><X className="w-5 h-5" /></button>
             </div>
             <div className="p-6 space-y-6">
-              <div className="flex gap-3">
-                <button onMouseUp={blurOnUI} onClick={() => togglePenalty('2')} className={`flex-1 py-3 rounded-xl font-bold border transition-all ${selectedSolve.penalty === 2 ? 'bg-yellow-600 border-yellow-500 text-white' : 'bg-slate-800 text-slate-400 border-white/5 hover:text-white'}`}>+2</button>
-                <button onMouseUp={blurOnUI} onClick={() => togglePenalty('DNF')} className={`flex-1 py-3 rounded-xl font-bold border transition-all ${selectedSolve.penalty === 'DNF' ? 'bg-red-600 border-red-500 text-white' : 'bg-slate-800 text-slate-400 border-white/5 hover:text-white'}`}>DNF</button>
-              </div>
+
               <div className="flex items-center gap-6 text-sm text-slate-400">
                 <div className="flex items-center gap-2"><Calendar className="w-4 h-4" />{formatDate(selectedSolve.timestamp)}</div>
                 <div className="flex items-center gap-2 text-slate-500"><Box className="w-4 h-4" /> {selectedSolve.type || '3x3'}</div>
@@ -232,9 +218,6 @@ const StatsView = ({ userId }) => {
       
       <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
         <button onMouseUp={blurOnUI} onClick={() => setFilterType('all')} className={`px-4 py-2 rounded-lg text-xs font-bold uppercase transition-colors ${filterType==='all' ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}>All</button>
-        <button onMouseUp={blurOnUI} onClick={() => setFilterType('3x3')} className={`px-4 py-2 rounded-lg text-xs font-bold uppercase transition-colors ${filterType==='3x3' ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}>3x3</button>
-        <button onMouseUp={blurOnUI} onClick={() => setFilterType('2x2')} className={`px-4 py-2 rounded-lg text-xs font-bold uppercase transition-colors ${filterType==='2x2' ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}>2x2</button>
-        <button onMouseUp={blurOnUI} onClick={() => setFilterType('4x4')} className={`px-4 py-2 rounded-lg text-xs font-bold uppercase transition-colors ${filterType==='4x4' ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}>4x4</button>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">

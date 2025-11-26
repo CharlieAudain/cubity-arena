@@ -240,6 +240,17 @@ export default function App() {
           >
             <Bluetooth className="w-4 h-4" /> {smartCube.isConnected ? 'Connected' : 'Connect Cube'}
           </button>
+          
+          {/* MOCK CONNECT (Dev Only) */}
+          {!smartCube.isConnected && (
+              <button 
+                  onClick={smartCube.connectMockCube}
+                  className="mr-4 px-2 py-1 rounded text-[10px] font-bold uppercase text-slate-600 hover:text-white hover:bg-white/10 transition-colors"
+                  title="Connect Mock Cube"
+              >
+                  Mock
+              </button>
+          )}
 
           {user ? (
             <div className="relative group z-50 inline-block">
@@ -254,6 +265,10 @@ export default function App() {
               </button>
               <div className="absolute right-0 top-full mt-2 w-48 bg-slate-900 border border-white/10 rounded-xl shadow-xl opacity-0 invisible transform -translate-y-2 scale-95 group-hover:opacity-100 group-hover:visible group-hover:translate-y-0 group-hover:scale-100 transition-all duration-200 ease-out origin-top-right overflow-hidden z-50">
                 <div className="p-1">
+                  <button onMouseUp={blurOnUI} onClick={() => setActiveTab('more')} className="w-full flex items-center gap-2 px-4 py-3 text-sm text-slate-300 hover:bg-white/5 hover:text-white rounded-lg transition-colors font-medium">
+                    <Settings className="w-4 h-4" />
+                    <span>Settings</span>
+                  </button>
                   <button onMouseUp={blurOnUI} onClick={handleLogout} className="w-full flex items-center gap-2 px-4 py-3 text-sm text-red-400 hover:bg-red-500/10 hover:text-red-300 rounded-lg transition-colors font-medium">
                     <LogOut className="w-4 h-4" />
                     <span>Log Out</span>
@@ -290,14 +305,25 @@ export default function App() {
                         const formData = new FormData(e.target);
                         const mac = formData.get('mac');
                         if (mac) {
+                            // Local validation
+                            const clean = mac.replace(/[^a-fA-F0-9]/g, '');
+                            if (clean.length !== 12) {
+                                alert(`Invalid MAC Address.\nExpected 12 hex characters (e.g., AA:BB:CC:11:22:33).\nYou entered ${clean.length} valid characters.`);
+                                return;
+                            }
                             smartCube.retryWithMac(mac.trim());
                         }
                     }}>
+                        {smartCube.error && (
+                            <div className="mb-4 p-3 bg-red-900/30 border border-red-500/30 rounded-lg text-red-400 text-xs font-bold flex items-center gap-2">
+                                <AlertCircle className="w-4 h-4"/> {smartCube.error}
+                            </div>
+                        )}
                         <input 
                             name="mac" 
                             type="text" 
-                            placeholder="XX:XX:XX:XX:XX:XX" 
-                            className="w-full bg-black/20 border border-white/10 rounded-lg px-4 py-3 text-white font-mono mb-4 focus:outline-none focus:border-blue-500"
+                            placeholder="AA:BB:CC:11:22:33" 
+                            className="w-full bg-black/20 border border-white/10 rounded-lg px-4 py-3 text-white font-mono mb-4 focus:outline-none focus:border-blue-500 uppercase"
                             autoFocus
                         />
                         <div className="flex justify-end gap-3">
@@ -384,6 +410,58 @@ export default function App() {
               </div>
             </div>
           )
+        )}
+
+        {activeTab === 'more' && user && (
+            <div className="max-w-md mx-auto">
+                <h2 className="text-2xl font-black italic text-white mb-8 tracking-tighter">SETTINGS</h2>
+                
+                <div className="bg-slate-900 border border-white/10 rounded-xl p-6 mb-6">
+                    <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                        <Bluetooth className="w-5 h-5 text-blue-400" /> Smart Cube
+                    </h3>
+                    
+                    {userData?.macAddress ? (
+                        <div>
+                            <div className="text-sm text-slate-400 mb-4">
+                                Saved MAC: <span className="font-mono text-white bg-white/10 px-2 py-1 rounded">{userData.macAddress}</span>
+                            </div>
+                            <button 
+                                onClick={async () => {
+                                    if (confirm("Forget this cube? You will need to enter the MAC address again.")) {
+                                        try {
+                                            const userRef = doc(db, 'artifacts', 'cubity-v1', 'users', user.uid, 'profile', 'main');
+                                            await updateDoc(userRef, { macAddress: null }); // Use deleteField() if needed, but null is fine for now
+                                            setUserData(prev => ({ ...prev, macAddress: null }));
+                                            smartCube.disconnectCube();
+                                            alert("Cube forgotten.");
+                                        } catch (err) {
+                                            console.error("Error clearing MAC:", err);
+                                            alert("Failed to clear MAC.");
+                                        }
+                                    }
+                                }}
+                                className="w-full bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 px-4 py-3 rounded-lg font-bold transition-colors flex items-center justify-center gap-2"
+                            >
+                                <LogOut className="w-4 h-4" /> Forget Saved Cube
+                            </button>
+                        </div>
+                    ) : (
+                        <div className="text-sm text-slate-500 italic">
+                            No cube MAC address saved. Connect a cube to save it.
+                        </div>
+                    )}
+                </div>
+
+                <div className="bg-slate-900 border border-white/10 rounded-xl p-6">
+                    <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                        <Users className="w-5 h-5 text-indigo-400" /> Account
+                    </h3>
+                    <button onMouseUp={blurOnUI} onClick={handleLogout} className="w-full bg-slate-800 hover:bg-slate-700 text-white px-4 py-3 rounded-lg font-bold transition-colors flex items-center justify-center gap-2">
+                        <LogOut className="w-4 h-4" /> Log Out
+                    </button>
+                </div>
+            </div>
         )}
       </main>
 
