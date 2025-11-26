@@ -46,6 +46,7 @@ const TimerView = ({ user, userData, onSolveComplete, dailyMode = false, recentS
             // Check for Solved State (Auto-Stop)
             if (timerState === 'RUNNING') {
                 let isSolved = false;
+                let method = 'none';
                 
                 // Prefer hardware facelets if available (most reliable)
                 if (smartCube.facelets) {
@@ -54,12 +55,19 @@ const TimerView = ({ user, userData, onSolveComplete, dailyMode = false, recentS
                     const faces = smartCube.facelets.match(/.{1,9}/g);
                     if (faces && faces.length === 6) {
                         isSolved = faces.every(face => face.split('').every(c => c === face[0]));
+                        method = 'hardware';
                     }
                 } else {
                     // Fallback to internal state tracking
                     isSolved = isStateSolved(newState);
+                    method = 'internal';
                 }
                 
+                console.log(`[Auto-Stop] Method: ${method}, Solved: ${isSolved}`, {
+                    facelets: smartCube.facelets,
+                    internalState: newState
+                });
+
                 if (isSolved) {
                     stopTimer();
                 }
