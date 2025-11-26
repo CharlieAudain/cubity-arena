@@ -234,13 +234,17 @@ export const simplifyMoveStack = (stack, newMove) => {
     if (stack.length === 0) return [newMove];
 
     const lastMove = stack[stack.length - 1];
-    const face1 = lastMove[0];
-    const face2 = newMove[0];
+    
+    // Helper to get base (e.g. "R", "Rw", "F")
+    const getBase = (m) => m.replace(/['2]/g, '');
+    
+    const base1 = getBase(lastMove);
+    const base2 = getBase(newMove);
 
-    // Different faces? Just push.
-    if (face1 !== face2) return [...stack, newMove];
+    // Different bases? Just push.
+    if (base1 !== base2) return [...stack, newMove];
 
-    // Same face: Merge
+    // Same base: Merge
     const getPower = (m) => {
         if (m.includes("2")) return 2;
         if (m.includes("'")) return -1;
@@ -259,7 +263,7 @@ export const simplifyMoveStack = (stack, newMove) => {
     }
 
     const newSuffix = sum === 2 ? "2" : sum === -1 ? "'" : "";
-    const mergedMove = face1 + newSuffix;
+    const mergedMove = base1 + newSuffix;
     
     return [...stack.slice(0, -1), mergedMove];
 };
