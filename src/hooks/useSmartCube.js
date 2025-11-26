@@ -51,10 +51,11 @@ export const useSmartCube = () => {
       console.error("Bluetooth Error:", err);
       // Check for specific MAC address error from library
       if (err.message && (err.message.includes("MAC") || err.message.includes("determine"))) {
-          if (savedMac) {
+          if (savedMac && typeof savedMac === 'string') {
               console.log("Auto-retrying with saved MAC:", savedMac);
               await retryWithMac(savedMac);
           } else {
+              console.warn("Invalid or missing saved MAC:", savedMac);
               setIsMacRequired(true);
               setError("Browser cannot read MAC address. Please enter it manually.");
           }
