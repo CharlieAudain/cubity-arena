@@ -197,7 +197,6 @@ const TimerView = ({ user, userData, onSolveComplete, dailyMode = false, recentS
           if (inspectionTime === -3) setPenalty('DNF'); // 18s elapsed
       }
   }, [inspectionTime, timerState]);
-  };
 
   const stopInspection = () => {
       if (inspectionIntervalRef.current) clearInterval(inspectionIntervalRef.current);
