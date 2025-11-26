@@ -223,3 +223,9 @@ export const applyCubeMove = (state, move, type) => {
   
   return newState;
 };
+
+export const getInverseMove = (move) => {
+  if (move.includes("2")) return move; // R2' is just R2
+  if (move.includes("'")) return move.replace("'", ""); // R' -> R
+  return move + "'"; // R -> R'
+};
