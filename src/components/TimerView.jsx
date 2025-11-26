@@ -29,6 +29,9 @@ const TimerView = ({ user, userData, onSolveComplete, dailyMode = false, recentS
   const [scrambleMoves, setScrambleMoves] = useState([]);
   const [correctionStack, setCorrectionStack] = useState([]); // Stack of moves to undo
   const [partialMove, setPartialMove] = useState(null); // Track halfway state of double moves (e.g. "R" of "R2")
+  
+  // Activity Feed
+  const [activityLog, setActivityLog] = useState([]);
 
   const timerRef = useRef(null);
   const startTimeRef = useRef(0);
@@ -112,8 +115,29 @@ const TimerView = ({ user, userData, onSolveComplete, dailyMode = false, recentS
     if (timerRef.current) clearInterval(timerRef.current);
     const finalTime = (Date.now() - startTimeRef.current) / 1000;
     setTimerState('STOPPED');
+    
+    // Calculate Grade
+    let grade = '';
+    const currentAo5 = calculateAverage(recentSolves, 5); // Recalculate or pass in? 
+    // Note: recentSolves here is the OLD list (before this solve). That's actually good for comparison.
+    const numAo5 = parseFloat(currentAo5);
+    
+    if (!isNaN(numAo5) && numAo5 > 0) {
+        if (finalTime < numAo5 * 0.85) grade = '!!';
+        else if (finalTime > numAo5 * 1.15) grade = '??';
+    }
+
+    // Add to Activity Feed
+    const newLog = { id: Date.now(), time: finalTime, grade, penalty };
+    setActivityLog(prev => [newLog, ...prev]);
+    
+    // Auto-remove after 5s
+    setTimeout(() => {
+        setActivityLog(prev => prev.filter(l => l.id !== newLog.id));
+    }, 5000);
+
     onSolveComplete(finalTime, scramble, dailyMode, cubeType, penalty); 
-  }, [scramble, onSolveComplete, dailyMode, cubeType, penalty]);
+  }, [scramble, onSolveComplete, dailyMode, cubeType, penalty, recentSolves]);
 
   const resetTimer = () => {
     setTimerState('IDLE');
@@ -509,6 +533,23 @@ const TimerView = ({ user, userData, onSolveComplete, dailyMode = false, recentS
         {timerState === 'STOPPED' ? 'Press Space to Reset' : 'Hold Space / Touch / Turn to Start'}
       </div>
       <div className="absolute bottom-[-5rem] text-slate-800 text-[10px] font-mono">v1.1 (Auto-Stop Fix)</div>
+
+      {/* Activity Feed */}
+      <div className="absolute bottom-4 left-4 flex flex-col-reverse gap-2 pointer-events-none">
+          {activityLog.map(log => (
+              <div key={log.id} className="bg-slate-900/80 backdrop-blur border border-white/10 p-3 rounded-lg shadow-xl animate-in slide-in-from-bottom-4 fade-in duration-300 flex items-center gap-3">
+                  <div className="text-2xl font-mono font-bold text-white">
+                      {log.time.toFixed(2)}
+                      {log.penalty && <span className="text-red-500 text-sm ml-1">{log.penalty}</span>}
+                  </div>
+                  {log.grade && (
+                      <div className={`text-xl font-black italic ${log.grade === '!!' ? 'text-green-400' : 'text-red-400'}`}>
+                          {log.grade}
+                      </div>
+                  )}
+              </div>
+          ))}
+      </div>
     </div>
   );
 };
