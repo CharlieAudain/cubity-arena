@@ -3,7 +3,7 @@ import { Trophy, Swords, RotateCcw, Grid2x2, Box, Grid3x3 } from 'lucide-react';
 import { generateScramble, getDailySeed, getSolvedState, applyCubeMove } from '../utils/cube';
 import { calculateAverage } from '../utils/stats';
 import ScrambleVisualizer from './ScrambleVisualizer';
-import Cube3D from './Cube3D';
+import SmartCube3D from './SmartCube3D';
 
 // --- UTILS: HELPER TO PREVENT FOCUS STEALING ---
 const blurOnUI = (e) => {
@@ -171,7 +171,7 @@ import Cube3D from './Cube3D';
 
         {/* 3D CUBE (Main View) */}
         <div className="mt-4 relative z-10">
-            <Cube3D 
+            <SmartCube3D 
                 scramble={scramble} 
                 type={cubeType} 
                 customState={smartCube?.isConnected && smartCube?.lastMove ? smartCube.lastMove : null} 

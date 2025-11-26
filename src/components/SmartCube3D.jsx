@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { TwistyPlayer } from 'cubing/twisty';
 
-const Cube3D = ({ scramble, type = '3x3', customState, onInit, isConnected }) => {
+const SmartCube3D = ({ scramble, type = '3x3', customState, onInit, isConnected }) => {
   const containerRef = useRef(null);
   const playerRef = useRef(null);
 
@@ -64,4 +64,4 @@ const Cube3D = ({ scramble, type = '3x3', customState, onInit, isConnected }) =>
   );
 };
 
-export default Cube3D;
+export default SmartCube3D;
