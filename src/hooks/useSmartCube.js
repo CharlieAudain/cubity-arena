@@ -56,7 +56,8 @@ export const useSmartCube = () => {
   const retryWithMac = async (macAddress) => {
       setError(null);
       try {
-          const conn = await connectGanCube(macAddress);
+          // connectGanCube expects a provider function, not a string
+          const conn = await connectGanCube(async () => macAddress);
           setupConnection(conn);
       } catch (err) {
           console.error("Retry Error:", err);

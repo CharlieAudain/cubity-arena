@@ -262,11 +262,16 @@ export default function App() {
                     <p className="text-slate-400 text-sm mb-4">
                         Your browser cannot detect the cube's MAC address automatically. 
                         Please enter it manually (e.g., <span className="font-mono text-white">AA:BB:CC:11:22:33</span>).
+                        <br/><br/>
+                        <span className="text-yellow-400 text-xs">NOTE: You will be asked to select your cube again after clicking Connect.</span>
                     </p>
                     <form onSubmit={(e) => {
                         e.preventDefault();
-                        const mac = e.target.mac.value.trim();
-                        if (mac) smartCube.retryWithMac(mac);
+                        const formData = new FormData(e.target);
+                        const mac = formData.get('mac');
+                        if (mac) {
+                            smartCube.retryWithMac(mac.trim());
+                        }
                     }}>
                         <input 
                             name="mac" 
