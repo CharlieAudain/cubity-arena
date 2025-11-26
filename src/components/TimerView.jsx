@@ -9,7 +9,20 @@ const blurOnUI = (e) => {
   e.currentTarget.blur();
 };
 
-const TimerView = ({ user, userData, onSolveComplete, dailyMode = false, recentSolves = [], forcedScramble = null, forcedType = null, disableScrambleGen = false, isBattle = false, smartCube }) => {
+const TimerView = ({ 
+  user, 
+  userData, 
+  onSolveComplete, 
+  dailyMode = false, 
+  recentSolves = [], 
+  forcedScramble = null, 
+  forcedType = null, 
+  disableScrambleGen = false, 
+  isBattle = false, 
+  smartCube = null,
+  onMove = null,        // NEW: Callback for every move
+  onStatusChange = null // NEW: Callback for status changes
+}) => {
   const [time, setTime] = useState(0);
   const [timerState, setTimerState] = useState('IDLE'); 
   const [cubeType, setCubeType] = useState('3x3'); 
@@ -39,6 +52,11 @@ const TimerView = ({ user, userData, onSolveComplete, dailyMode = false, recentS
   const timerRef = useRef(null);
   const startTimeRef = useRef(0);
 
+  // Notify parent of status changes
+  useEffect(() => {
+      if (onStatusChange) onStatusChange(timerState);
+  }, [timerState, onStatusChange]);
+
   // --- SMART CUBE INTEGRATION ---
   useEffect(() => {
     if (smartCube && smartCube.isConnected) {
@@ -52,6 +70,9 @@ const TimerView = ({ user, userData, onSolveComplete, dailyMode = false, recentS
             const newState = applyCubeMove(currentCubeState, smartCube.lastMove.move, cubeType);
             setCurrentCubeState(newState);
             
+            // Notify Parent (BattleRoom)
+            if (onMove) onMove(smartCube.lastMove.move);
+
             // Track Solution Moves
             if (timerState === 'RUNNING') {
                 setSolutionMoves(prev => [...prev, smartCube.lastMove.move]);
