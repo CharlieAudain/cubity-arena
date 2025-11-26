@@ -13,7 +13,6 @@ const SmartCube3D = ({ scramble, type = '3x3', customState, onInit, isConnected 
         visualization: 'PG3D',
         alg: scramble || '',
         background: 'none',
-        controlPanel: 'none',
         hintFacelets: 'none',
         experimentalSetupAnchor: 'start',
       });
@@ -23,6 +22,7 @@ const SmartCube3D = ({ scramble, type = '3x3', customState, onInit, isConnected 
       player.style.height = '100%';
       player.setAttribute('control-panel', 'none');
       player.setAttribute('background', 'none');
+      player.tempoScale = 5; // Speed up animations to prevent skipping
       
       containerRef.current.appendChild(player);
       playerRef.current = player;
