@@ -53,11 +53,34 @@ const SmartCube3D = ({ scramble, type = '3x3', customState, onInit, isConnected 
     }
   }, [scramble, isConnected]);
 
+  // Move Queue
+  const moveQueue = useRef([]);
+  const isAnimating = useRef(false);
+
+  const processQueue = async () => {
+      if (isAnimating.current || moveQueue.current.length === 0 || !playerRef.current) return;
+
+      isAnimating.current = true;
+      const move = moveQueue.current.shift();
+
+      try {
+          // experimentalAddMove returns a promise that resolves when the animation is done
+          await playerRef.current.experimentalAddMove(move); 
+      } catch (e) {
+          console.error("Animation error:", e);
+          // Fallback: just wait a bit if it failed or didn't return a promise
+          await new Promise(r => setTimeout(r, 150)); 
+      }
+
+      isAnimating.current = false;
+      processQueue(); // Process next move
+  };
+
   // Handle Live Moves
   useEffect(() => {
-      if (playerRef.current && customState && customState.move) {
-          // Apply the move to the player
-          playerRef.current.experimentalAddMove(customState.move);
+      if (customState && customState.move) {
+          moveQueue.current.push(customState.move);
+          processQueue();
       }
   }, [customState]);
   
