@@ -14,6 +14,11 @@ import BattleRoom from './BattleRoom';
 const ArenaView = ({ user, smartCube }) => {
   const { status, roomId, roomData, findMatch, cancelSearch, error } = useMatchmaking(user);
   const [queueType, setQueueType] = useState('3x3'); 
+  const [debugRoom, setDebugRoom] = useState(null);
+
+  if (debugRoom) {
+      return <BattleRoom user={user} roomData={debugRoom} roomId={debugRoom.id} onExit={() => setDebugRoom(null)} smartCube={smartCube} />;
+  }
 
   if (status === 'found' && roomData) {
       return <BattleRoom user={user} roomData={roomData} roomId={roomId} onExit={cancelSearch} smartCube={smartCube} />;
@@ -38,6 +43,19 @@ const ArenaView = ({ user, smartCube }) => {
               <Swords className="w-5 h-5" /> FIND MATCH ({queueType})
             </button>
             {error && <p className="text-red-400 text-xs mt-2">{error}</p>}
+            
+            {/* DEBUG ROOM BUTTON */}
+            <button onClick={() => {
+                setDebugRoom({
+                    id: 'debug-room-1',
+                    player1: { uid: user?.uid || 'p1', name: user?.displayName || 'Player 1' },
+                    player2: { uid: 'other', name: 'Opponent' },
+                    scramble: "R U R' U' R U R' U' R U R' U'",
+                    type: '3x3'
+                });
+            }} className="mt-4 bg-slate-800 text-slate-500 text-xs px-4 py-2 rounded-lg font-mono hover:text-white hover:bg-slate-700 transition-colors">
+                ENTER DEBUG ROOM (NO FIRESTORE)
+            </button>
           </div>
         </>
       )}
