@@ -168,9 +168,13 @@ const TimerView = ({ user, userData, onSolveComplete, dailyMode = false, recentS
           const targetMove = scrambleMoves[scrambleIndex];
           
           // Helper to check if move is the first half of a double move
-          // e.g. target "R2", user "R" -> true
+          // e.g. target "R2", user "R" -> true. User "R'" -> true (since R' + R' = R2)
           const isPartialMatch = (target, user) => {
-              return target.includes("2") && user === target[0];
+              if (!target.includes("2")) return false;
+              // Must be same face
+              if (target[0] !== user[0]) return false;
+              // Any move on that face (R or R') is a valid start for R2
+              return true;
           };
 
           if (partialMove) {
