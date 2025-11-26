@@ -2,7 +2,8 @@ import React, { useEffect, useRef } from 'react';
 import { TwistyPlayer } from 'cubing/twisty';
 
 const SmartCube3D = ({ scramble, type = '3x3', customState, onInit, isConnected, syncTrigger, className = "h-48 md:h-64" }) => {
-  // ... (refs and effects)
+  const containerRef = useRef(null);
+  const playerRef = useRef(null);
 
 
 
