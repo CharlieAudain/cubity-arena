@@ -152,13 +152,9 @@ const TimerView = ({ user, userData, onSolveComplete, dailyMode = false, recentS
           {scramble}
         </div>
         
-import Cube3D from './Cube3D';
 
-// ... (inside component)
 
-  const [show2D, setShow2D] = useState(false); // Default to 3D
 
-// ...
 
         <div className="flex justify-center gap-4 mt-4">
           {!dailyMode && !disableScrambleGen && <button onMouseUp={blurOnUI} onClick={resetTimer} className="text-slate-600 hover:text-white transition-colors"><RotateCcw className="w-5 h-5" /></button>}
