@@ -275,6 +275,9 @@ const TimerView = ({ user, userData, onSolveComplete, dailyMode = false, recentS
   // Track Scramble Progress
   useEffect(() => {
       if (smartCube && smartCube.isConnected && smartCube.lastMove && scrambleMoves.length > 0) {
+          // Stop tracking if scramble is already complete
+          if (scrambleIndex >= scrambleMoves.length) return;
+
           const userMove = smartCube.lastMove.move;
           
           // 1. Check Correction Stack first
