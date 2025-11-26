@@ -68,6 +68,7 @@ const TimerView = ({ user, userData, onSolveComplete, dailyMode = false, recentS
       case 'READY': return 'text-green-500';
       case 'RUNNING': return 'text-white'; 
       case 'STOPPED': return 'text-blue-400';
+      case 'INSPECTION': return inspectionTime < 0 ? 'text-red-500' : 'text-orange-400';
       default: return dailyMode ? 'text-indigo-300' : 'text-white'; 
     }
   };
@@ -84,8 +85,8 @@ const TimerView = ({ user, userData, onSolveComplete, dailyMode = false, recentS
     if (timerRef.current) clearInterval(timerRef.current);
     const finalTime = (Date.now() - startTimeRef.current) / 1000;
     setTimerState('STOPPED');
-    onSolveComplete(finalTime, scramble, dailyMode, cubeType); 
-  }, [scramble, onSolveComplete, dailyMode, cubeType]);
+    onSolveComplete(finalTime, scramble, dailyMode, cubeType, penalty); 
+  }, [scramble, onSolveComplete, dailyMode, cubeType, penalty]);
 
   const resetTimer = () => {
     setTimerState('IDLE');
@@ -118,17 +119,108 @@ const TimerView = ({ user, userData, onSolveComplete, dailyMode = false, recentS
     };
   }, [timerState, stopTimer, cubeType]); 
 
+  // Inspection State
+  const [inspectionTime, setInspectionTime] = useState(15);
+  const [penalty, setPenalty] = useState(null); // null, '+2', 'DNF'
+  const inspectionIntervalRef = useRef(null);
+
+  // Audio Alerts
+  const speak = (text) => {
+      if ('speechSynthesis' in window) {
+          const utterance = new SpeechSynthesisUtterance(text);
+          window.speechSynthesis.speak(utterance);
+      }
+  };
+
+  const startInspection = () => {
+      setTimerState('INSPECTION');
+      setInspectionTime(15);
+      setPenalty(null);
+      
+      inspectionIntervalRef.current = setInterval(() => {
+          setInspectionTime(prev => {
+              const next = prev - 1;
+              
+              // Audio Alerts
+              if (next === 7) speak("Eight Seconds"); // 8s elapsed (15-7=8)
+              if (next === 3) speak("Twelve Seconds"); // 12s elapsed (15-3=12)
+              
+              // Penalties
+              if (next === -1) setPenalty('+2'); // 16s elapsed
+              if (next === -3) setPenalty('DNF'); // 18s elapsed (17s limit passed)
+              
+              return next;
+          });
+      }, 1000);
+  };
+
+  const stopInspection = () => {
+      if (inspectionIntervalRef.current) clearInterval(inspectionIntervalRef.current);
+  };
+
+  // Auto-start inspection on scramble complete
+  useEffect(() => {
+      if (scrambleMoves.length > 0 && scrambleIndex === scrambleMoves.length && timerState === 'IDLE') {
+          // Only auto-start if connected to smart cube
+          if (smartCube && smartCube.isConnected) {
+              startInspection();
+          }
+      }
+  }, [scrambleIndex, scrambleMoves.length, timerState, smartCube?.isConnected]);
+
+  // Handle move during inspection -> Start Solve
+  useEffect(() => {
+      if (timerState === 'INSPECTION' && smartCube?.lastMove) {
+          stopInspection();
+          if (penalty === 'DNF') {
+              setTimerState('STOPPED');
+              // Handle DNF immediately or just show it? 
+              // For now, let's just stop and show DNF.
+              onSolveComplete(0, scramble, dailyMode, cubeType, 'DNF');
+          } else {
+              startTimer();
+              // Pass penalty to onSolveComplete when done?
+              // We need to store it to pass later.
+          }
+      }
+  }, [smartCube?.lastMove, timerState, penalty]);
+
+  // Cleanup
+  useEffect(() => {
+      return () => stopInspection();
+  }, []);
+
   const handleTouchStart = () => {
     if (timerState === 'IDLE' || timerState === 'STOPPED') {
       if (timerState === 'STOPPED') resetTimer();
       setTimerState('HOLDING');
       setTimeout(() => setTimerState(prev => prev === 'HOLDING' ? 'READY' : prev), 300);
     } else if (timerState === 'RUNNING') stopTimer();
+    // Inspection touch handling? Usually inspection is hands-off until start.
+    // If user holds space/touch during inspection, they are preparing to start.
+    else if (timerState === 'INSPECTION') {
+        setTimerState('HOLDING');
+        stopInspection();
+        setTimeout(() => setTimerState(prev => prev === 'HOLDING' ? 'READY' : prev), 300);
+    }
   };
 
   const handleTouchEnd = () => {
     if (timerState === 'READY') startTimer();
-    else if (timerState === 'HOLDING') setTimerState('IDLE');
+    else if (timerState === 'HOLDING') {
+        // If they let go too early during inspection, resume inspection?
+        // Or go back to IDLE? WCA rules say if you start, you start.
+        // If they abort the hold, we should probably resume inspection or just go IDLE.
+        // Let's go back to INSPECTION for now if possible, or just IDLE.
+        if (inspectionTime > 0) {
+             // Resume inspection? Complex. Let's just reset to IDLE for simplicity or keep INSPECTION running if we didn't stop it fully.
+             // Actually, we stopped it in touchStart.
+             // Let's just go to IDLE.
+             setTimerState('IDLE');
+        } else {
+             setTimerState('IDLE');
+        }
+    }
   };
 
   // Scramble Tracking
@@ -334,8 +426,21 @@ const TimerView = ({ user, userData, onSolveComplete, dailyMode = false, recentS
       </div>
 
       <div className={`text-[6rem] md:text-[12rem] font-black font-mono tabular-nums leading-none tracking-tighter transition-colors duration-100 ${getTimerColor()}`}>
-        {(time / 1000).toFixed(2)}
+        {timerState === 'INSPECTION' ? (
+            <span className={`${inspectionTime < 0 ? 'text-red-500' : 'text-orange-400'}`}>
+                {Math.abs(inspectionTime)}
+            </span>
+        ) : (
+            (time / 1000).toFixed(2)
+        )}
       </div>
+      
+      {/* Penalty Indicator */}
+      {penalty && timerState !== 'IDLE' && (
+          <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-[10rem] text-red-600/20 font-black pointer-events-none z-0">
+              {penalty}
+          </div>
+      )}
 
       {/* Session Stats Overlay */}
       {!disableScrambleGen && !isBattle && (
