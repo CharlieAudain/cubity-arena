@@ -54,10 +54,6 @@ const TimerView = ({ user, userData, onSolveComplete, dailyMode = false, recentS
                 // Rely on internal state tracking (more reliable than raw facelets which can be affected by gyro drift)
                 const isSolved = isStateSolved(newState);
                 
-                console.log(`[Auto-Stop] Solved: ${isSolved}`, {
-                    internalState: newState
-                });
-
                 if (isSolved) {
                     stopTimer();
                 }
