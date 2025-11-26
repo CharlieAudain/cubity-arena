@@ -1,9 +1,13 @@
 import React, { useEffect, useRef } from 'react';
 import { TwistyPlayer } from 'cubing/twisty';
 
-const SmartCube3D = ({ scramble, type = '3x3', customState, onInit, isConnected, syncTrigger }) => {
-  const containerRef = useRef(null);
-  const playerRef = useRef(null);
+const SmartCube3D = ({ scramble, type = '3x3', customState, onInit, isConnected, syncTrigger, className = "h-48 md:h-64" }) => {
+  // ... (refs and effects)
+
+  return (
+    <div ref={containerRef} className={`w-full flex items-center justify-center ${className}`} />
+  );
+};
 
   useEffect(() => {
     // Initialize player
@@ -94,7 +98,7 @@ const SmartCube3D = ({ scramble, type = '3x3', customState, onInit, isConnected,
   }, [customState]);
   
   return (
-    <div ref={containerRef} className="w-full h-48 md:h-64 flex items-center justify-center" />
+    <div ref={containerRef} className={`w-full flex items-center justify-center ${className}`} />
   );
 };
 

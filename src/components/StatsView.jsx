@@ -188,11 +188,12 @@ const StatsView = ({ userId }) => {
                     </div>
                     
                     {/* 3D Cube Preview */}
-                    <div className="h-32 mb-4 relative">
+                    <div className="mb-4 relative">
                         <SmartCube3D 
                             cubeState={playbackState} 
                             lastMove={null} // No live moves
                             isConnected={false}
+                            className="h-32"
                         />
                     </div>
 
