@@ -135,12 +135,14 @@ const TimerView = ({ user, userData, onSolveComplete, dailyMode = false, recentS
   const [scrambleIndex, setScrambleIndex] = useState(0);
   const [scrambleMoves, setScrambleMoves] = useState([]);
   const [correctionStack, setCorrectionStack] = useState([]); // Stack of moves to undo
+  const [partialMove, setPartialMove] = useState(null); // Track halfway state of double moves (e.g. "R" of "R2")
 
   useEffect(() => {
       if (scramble) {
           setScrambleMoves(scramble.split(" ").filter(m => m));
           setScrambleIndex(0);
           setCorrectionStack([]);
+          setPartialMove(null);
       }
   }, [scramble]);
 
@@ -165,13 +167,43 @@ const TimerView = ({ user, userData, onSolveComplete, dailyMode = false, recentS
           // 2. Check Normal Scramble Progress
           const targetMove = scrambleMoves[scrambleIndex];
           
-          if (targetMove === userMove) {
-              setScrambleIndex(prev => Math.min(prev + 1, scrambleMoves.length));
+          // Helper to check if move is the first half of a double move
+          // e.g. target "R2", user "R" -> true
+          const isPartialMatch = (target, user) => {
+              return target.includes("2") && user === target[0];
+          };
+
+          if (partialMove) {
+              // We are halfway through a double move (e.g. at "R", needing another "R" for "R2")
+              if (userMove === partialMove) {
+                  // Completed the double move!
+                  setPartialMove(null);
+                  setScrambleIndex(prev => Math.min(prev + 1, scrambleMoves.length));
+              } else if (userMove === getInverseMove(partialMove)) {
+                  // User undid the partial move (e.g. R then R')
+                  // Just clear partial state, back to start of this move
+                  setPartialMove(null);
+              } else {
+                  // Wrong move during partial!
+                  // Need to undo THIS move AND the partial move.
+                  // e.g. Partial "R", User "U" -> Stack ["U'", "R'"]
+                  const undoPartial = getInverseMove(partialMove);
+                  const undoUser = getInverseMove(userMove);
+                  setCorrectionStack([undoUser, undoPartial]);
+                  setPartialMove(null);
+              }
           } else {
-              // Wrong move! User went off track.
-              // Push inverse of this wrong move to correction stack.
-              // e.g. Target R, User L -> Stack [L']
-              setCorrectionStack([getInverseMove(userMove)]);
+              // Standard check
+              if (targetMove === userMove) {
+                  // Exact match (e.g. R2 -> R2, or R -> R)
+                  setScrambleIndex(prev => Math.min(prev + 1, scrambleMoves.length));
+              } else if (isPartialMatch(targetMove, userMove)) {
+                  // Partial match (e.g. R2 -> R)
+                  setPartialMove(userMove);
+              } else {
+                  // Wrong move!
+                  setCorrectionStack([getInverseMove(userMove)]);
+              }
           }
       }
   }, [smartCube?.lastMove]);
@@ -200,12 +232,15 @@ const TimerView = ({ user, userData, onSolveComplete, dailyMode = false, recentS
                   const isCurrent = idx === scrambleIndex;
                   // If correcting, dim the current move
                   const isDimmed = correctionStack.length > 0 && isCurrent;
+                  // If partial, show yellow
+                  const isPartial = partialMove && isCurrent;
 
                   return (
                       <span key={idx} className={`
                           font-mono transition-all duration-200
                           ${isDone ? 'text-green-500/30 scale-90' : ''}
                           ${isCurrent && !isDimmed ? 'text-blue-400 font-bold scale-125 mx-2' : ''}
+                          ${isPartial ? 'text-yellow-400' : ''}
                           ${!isDone && !isCurrent ? 'text-slate-500' : ''}
                           ${isDimmed ? 'text-slate-600 opacity-50' : ''}
                       `}>
