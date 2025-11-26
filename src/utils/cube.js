@@ -67,6 +67,13 @@ export const getSolvedState = (size) => {
   return colors.map(c => Array(stickersPerFace).fill(c));
 };
 
+export const isStateSolved = (state) => {
+  return state.every(face => {
+    const firstColor = face[0];
+    return face.every(sticker => sticker === firstColor);
+  });
+};
+
 const rotateFace = (face, size) => {
   const newFace = [...face];
   for (let i = 0; i < size; i++) {

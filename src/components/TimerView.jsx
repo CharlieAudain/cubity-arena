@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Trophy, Swords, RotateCcw, Grid2x2, Box, Grid3x3 } from 'lucide-react';
-import { generateScramble, getDailySeed, getSolvedState, applyCubeMove, getInverseMove, simplifyMoveStack } from '../utils/cube';
+import { generateScramble, getDailySeed, getSolvedState, applyCubeMove, getInverseMove, simplifyMoveStack, isStateSolved } from '../utils/cube';
 import { calculateAverage } from '../utils/stats';
 import SmartCube3D from './SmartCube3D';
 
@@ -44,14 +44,12 @@ const TimerView = ({ user, userData, onSolveComplete, dailyMode = false, recentS
             
             // Check for Solved State (Auto-Stop)
             if (timerState === 'RUNNING') {
-                const solvedState = getSolvedState(cubeType === '2x2' ? 2 : cubeType === '4x4' ? 4 : 3);
-                const isSolved = JSON.stringify(newState) === JSON.stringify(solvedState);
+                const isSolved = isStateSolved(newState);
                 
                 console.log("Auto-Stop Check:", { 
                     isSolved, 
                     timerState, 
-                    moves: smartCube.lastMove.move,
-                    stateMatch: JSON.stringify(newState) === JSON.stringify(solvedState)
+                    moves: smartCube.lastMove.move
                 });
 
                 if (isSolved) {
@@ -148,6 +146,12 @@ const TimerView = ({ user, userData, onSolveComplete, dailyMode = false, recentS
 
 
 
+  // Inspection State
+  const [inspectionTime, setInspectionTime] = useState(15);
+  const [penalty, setPenalty] = useState(null); // null, '+2', 'DNF'
+  const inspectionIntervalRef = useRef(null);
+  const lastMoveAtInspectionStart = useRef(null); // Track move that started inspection
+
   // Audio Alerts
   const speak = (text) => {
       if ('speechSynthesis' in window) {
@@ -161,6 +165,11 @@ const TimerView = ({ user, userData, onSolveComplete, dailyMode = false, recentS
       setInspectionTime(15);
       setPenalty(null);
       
+      // Record the move that triggered inspection so we don't immediately start solving
+      if (smartCube?.lastMove) {
+          lastMoveAtInspectionStart.current = smartCube.lastMove;
+      }
+
       inspectionIntervalRef.current = setInterval(() => {
           setInspectionTime(prev => {
               const next = prev - 1;
@@ -195,16 +204,15 @@ const TimerView = ({ user, userData, onSolveComplete, dailyMode = false, recentS
   // Handle move during inspection -> Start Solve
   useEffect(() => {
       if (timerState === 'INSPECTION' && smartCube?.lastMove) {
+          // Ignore the move that started inspection
+          if (smartCube.lastMove === lastMoveAtInspectionStart.current) return;
+
           stopInspection();
           if (penalty === 'DNF') {
               setTimerState('STOPPED');
-              // Handle DNF immediately or just show it? 
-              // For now, let's just stop and show DNF.
               onSolveComplete(0, scramble, dailyMode, cubeType, 'DNF');
           } else {
               startTimer();
-              // Pass penalty to onSolveComplete when done?
-              // We need to store it to pass later.
           }
       }
   }, [smartCube?.lastMove, timerState, penalty]);
