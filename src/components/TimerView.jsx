@@ -19,6 +19,12 @@ const TimerView = ({ user, userData, onSolveComplete, dailyMode = false, recentS
   const [currentCubeState, setCurrentCubeState] = useState(null); // Live cube state
   const [syncTrigger, setSyncTrigger] = useState(0); // Manual sync trigger
   const [showSyncPrompt, setShowSyncPrompt] = useState(false);
+  
+  // Inspection State
+  const [inspectionTime, setInspectionTime] = useState(15);
+  const [penalty, setPenalty] = useState(null); // null, '+2', 'DNF'
+  const inspectionIntervalRef = useRef(null);
+
   const timerRef = useRef(null);
   const startTimeRef = useRef(0);
 
@@ -119,10 +125,7 @@ const TimerView = ({ user, userData, onSolveComplete, dailyMode = false, recentS
     };
   }, [timerState, stopTimer, cubeType]); 
 
-  // Inspection State
-  const [inspectionTime, setInspectionTime] = useState(15);
-  const [penalty, setPenalty] = useState(null); // null, '+2', 'DNF'
-  const inspectionIntervalRef = useRef(null);
+
 
   // Audio Alerts
   const speak = (text) => {
