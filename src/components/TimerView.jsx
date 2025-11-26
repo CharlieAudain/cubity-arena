@@ -441,6 +441,10 @@ const TimerView = ({ user, userData, onSolveComplete, dailyMode = false, recentS
               <button onMouseUp={blurOnUI} onClick={() => {
                   setSyncTrigger(prev => prev + 1);
                   setCurrentCubeState(getSolvedState(3)); // Reset internal state to solved
+                  // Reset scramble progress
+                  setScrambleIndex(0);
+                  setCorrectionStack([]);
+                  setPartialMove(null);
               }} className="text-xs font-bold px-3 py-1 rounded-full border border-green-500/20 bg-green-500/10 text-green-400 hover:bg-green-500/20 transition-colors">
                   Mark as Solved
               </button>
