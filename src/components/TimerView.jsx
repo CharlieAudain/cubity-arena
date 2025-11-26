@@ -38,6 +38,9 @@ const TimerView = ({ user, userData, onSolveComplete, dailyMode = false, recentS
     if (smartCube && smartCube.isConnected) {
         setShowSyncPrompt(true); // Show one-time sync prompt
         
+        // Force internal state to SOLVED on connection to ensure sync
+        setCurrentCubeState(getSolvedState(cubeType === '2x2' ? 2 : cubeType === '4x4' ? 4 : 3));
+
         if (smartCube.lastMove && currentCubeState) {
             // Update live state on move
             const newState = applyCubeMove(currentCubeState, smartCube.lastMove.move, cubeType);
@@ -45,26 +48,10 @@ const TimerView = ({ user, userData, onSolveComplete, dailyMode = false, recentS
             
             // Check for Solved State (Auto-Stop)
             if (timerState === 'RUNNING') {
-                let isSolved = false;
-                let method = 'none';
+                // Rely on internal state tracking (more reliable than raw facelets which can be affected by gyro drift)
+                const isSolved = isStateSolved(newState);
                 
-                // Prefer hardware facelets if available (most reliable)
-                if (smartCube.facelets) {
-                    // GAN facelets string: "UUUUUUUUURRRRRRRRRFFFFFFFFFDDDDDDDDDLLLLLLLLLBBBBBBBBB"
-                    // Check if each face (9 chars) consists of the same char
-                    const faces = smartCube.facelets.match(/.{1,9}/g);
-                    if (faces && faces.length === 6) {
-                        isSolved = faces.every(face => face.split('').every(c => c === face[0]));
-                        method = 'hardware';
-                    }
-                } else {
-                    // Fallback to internal state tracking
-                    isSolved = isStateSolved(newState);
-                    method = 'internal';
-                }
-                
-                console.log(`[Auto-Stop] Method: ${method}, Solved: ${isSolved}`, {
-                    facelets: smartCube.facelets,
+                console.log(`[Auto-Stop] Solved: ${isSolved}`, {
                     internalState: newState
                 });
 
