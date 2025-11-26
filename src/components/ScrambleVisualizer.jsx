@@ -1,11 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { getSolvedState, applyCubeMove } from '../utils/cube';
 
-const ScrambleVisualizer = ({ scramble, type }) => {
+const ScrambleVisualizer = ({ scramble, type, customState }) => {
   const size = type === '2x2' ? 2 : type === '4x4' ? 4 : 3;
   const [state, setState] = useState(getSolvedState(size));
 
   useEffect(() => {
+    if (customState) {
+      setState(customState);
+      return;
+    }
+    
     let currentState = getSolvedState(size);
     if (scramble) {
       const moves = scramble.split(' ');
@@ -15,7 +20,7 @@ const ScrambleVisualizer = ({ scramble, type }) => {
       });
     }
     setState(currentState);
-  }, [scramble, type, size]);
+  }, [scramble, type, size, customState]);
   
   const renderFace = (faceIndex, x, y) => {
     const stickerSize = 100 / size;
