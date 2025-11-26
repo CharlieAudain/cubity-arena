@@ -4,10 +4,7 @@ import { TwistyPlayer } from 'cubing/twisty';
 const SmartCube3D = ({ scramble, type = '3x3', customState, onInit, isConnected, syncTrigger, className = "h-48 md:h-64" }) => {
   // ... (refs and effects)
 
-  return (
-    <div ref={containerRef} className={`w-full flex items-center justify-center ${className}`} />
-  );
-};
+
 
   useEffect(() => {
     // Initialize player
