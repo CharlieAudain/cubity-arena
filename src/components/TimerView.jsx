@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Trophy, Swords, RotateCcw, Grid2x2, Box, Grid3x3 } from 'lucide-react';
-import { generateScramble, getDailySeed, getSolvedState, applyCubeMove } from '../utils/cube';
+import { generateScramble, getDailySeed, getSolvedState, applyCubeMove, getInverseMove } from '../utils/cube';
 import { calculateAverage } from '../utils/stats';
 import ScrambleVisualizer from './ScrambleVisualizer';
 import SmartCube3D from './SmartCube3D';
@@ -134,28 +134,44 @@ const TimerView = ({ user, userData, onSolveComplete, dailyMode = false, recentS
   // Scramble Tracking
   const [scrambleIndex, setScrambleIndex] = useState(0);
   const [scrambleMoves, setScrambleMoves] = useState([]);
+  const [correctionStack, setCorrectionStack] = useState([]); // Stack of moves to undo
 
   useEffect(() => {
       if (scramble) {
           setScrambleMoves(scramble.split(" ").filter(m => m));
           setScrambleIndex(0);
+          setCorrectionStack([]);
       }
   }, [scramble]);
 
   // Track Scramble Progress
   useEffect(() => {
       if (smartCube && smartCube.isConnected && smartCube.lastMove && scrambleMoves.length > 0) {
-          const targetMove = scrambleMoves[scrambleIndex];
           const userMove = smartCube.lastMove.move;
           
-          // Simple matching: if user does the move, advance.
-          // Note: This is basic. Real scrambling might need to handle R vs R' vs R2 nuances more robustly.
-          // For now, we assume the user follows the notation.
+          // 1. Check Correction Stack first
+          if (correctionStack.length > 0) {
+              const requiredCorrection = correctionStack[correctionStack.length - 1];
+              if (userMove === requiredCorrection) {
+                  // Correct correction! Pop from stack.
+                  setCorrectionStack(prev => prev.slice(0, -1));
+              } else {
+                  // Wrong move while correcting? Add to stack!
+                  setCorrectionStack(prev => [...prev, getInverseMove(userMove)]);
+              }
+              return;
+          }
+
+          // 2. Check Normal Scramble Progress
+          const targetMove = scrambleMoves[scrambleIndex];
+          
           if (targetMove === userMove) {
               setScrambleIndex(prev => Math.min(prev + 1, scrambleMoves.length));
-          } else if (targetMove && (targetMove.includes("2") && userMove === targetMove[0])) {
-               // Handle partial R2 (if user does R, we might wait for another R? Or just ignore?)
-               // For simplicity in this MVP, we require exact match or we don't advance.
+          } else {
+              // Wrong move! User went off track.
+              // Push inverse of this wrong move to correction stack.
+              // e.g. Target R, User L -> Stack [L']
+              setCorrectionStack([getInverseMove(userMove)]);
           }
       }
   }, [smartCube?.lastMove]);
@@ -165,15 +181,33 @@ const TimerView = ({ user, userData, onSolveComplete, dailyMode = false, recentS
       if (!smartCube || !smartCube.isConnected) return scramble;
 
       return (
-          <div className="flex flex-wrap justify-center gap-x-3 gap-y-2">
+          <div className="flex flex-wrap justify-center gap-x-3 gap-y-2 items-center">
+              {/* Render Correction Moves if any */}
+              {correctionStack.length > 0 && (
+                  <div className="flex gap-2 mr-4 animate-pulse">
+                      <span className="text-red-500 font-bold text-sm uppercase tracking-widest">UNDO:</span>
+                      {/* Show stack in reverse order (LIFO) - actually we just need to show the top one prominently */}
+                      {[...correctionStack].reverse().map((move, idx) => (
+                          <span key={`corr-${idx}`} className="text-red-400 font-bold text-2xl border border-red-500/50 rounded px-2 bg-red-900/20">
+                              {move}
+                          </span>
+                      ))}
+                  </div>
+              )}
+
               {scrambleMoves.map((move, idx) => {
                   const isDone = idx < scrambleIndex;
                   const isCurrent = idx === scrambleIndex;
+                  // If correcting, dim the current move
+                  const isDimmed = correctionStack.length > 0 && isCurrent;
+
                   return (
                       <span key={idx} className={`
                           font-mono transition-all duration-200
                           ${isDone ? 'text-green-500/30 scale-90' : ''}
-                          ${isCurrent ? 'text-blue-400 font-bold scale-125 mx-2' : 'text-slate-500'}
+                          ${isCurrent && !isDimmed ? 'text-blue-400 font-bold scale-125 mx-2' : ''}
+                          ${!isDone && !isCurrent ? 'text-slate-500' : ''}
+                          ${isDimmed ? 'text-slate-600 opacity-50' : ''}
                       `}>
                           {move}
                       </span>
