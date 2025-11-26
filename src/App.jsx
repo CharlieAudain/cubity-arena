@@ -32,6 +32,8 @@ import {
   ArrowRightLeft,
   Search,
   Loader2,
+  Crown,
+  Frown,
 } from "lucide-react";
 import {
   onAuthStateChanged,
@@ -153,18 +155,20 @@ const getDailySeed = () => {
 };
 
 // --- UTILS: CUBE ENGINE ---
-const getInitialState = (type) => {
-  const size = type === "2x2" ? 2 : type === "4x4" ? 4 : 3;
-  const stickersPerFace = size * size;
-  const colors = [
-    "#ffffff",
-    "#ef4444",
-    "#22c55e",
-    "#eab308",
-    "#f97316",
-    "#3b82f6",
-  ];
-  return colors.map((c) => Array(stickersPerFace).fill(c));
+// Faces: 0:U, 1:R, 2:F, 3:D, 4:L, 5:B
+// Colors: W, R, G, Y, O, B
+const SOLVED_COLORS = [
+  "#ffffff",
+  "#ef4444",
+  "#22c55e",
+  "#eab308",
+  "#f97316",
+  "#3b82f6",
+];
+
+// MOVED THIS UP SO IT IS DEFINED BEFORE USE
+const getSolvedState = (size) => {
+  return SOLVED_COLORS.map((c) => Array(size * size).fill(c));
 };
 
 const rotateFace = (face, size) => {
@@ -443,7 +447,6 @@ const calculateBestAverage = (solves, size) => {
       times.sort((a, b) => a - b);
 
       let sum = 0;
-      // Sum middle items (remove 1 best, 1 worst)
       for (let j = 1; j < size - 1; j++) {
         sum += times[j];
       }
@@ -476,19 +479,25 @@ const LogoVelocity = ({ className }) => (
 
 // --- HOOK: MATCHMAKING ---
 const useMatchmaking = (user) => {
-  const [status, setStatus] = useState("idle"); // idle, searching, found
+  const [status, setStatus] = useState("idle");
   const [roomId, setRoomId] = useState(null);
+  const [roomData, setRoomData] = useState(null);
   const [error, setError] = useState(null);
-  const searchRef = useRef(null); // To allow canceling listener
+  const searchRef = useRef(null);
+  const roomIdRef = useRef(null);
+  const statusRef = useRef("idle");
 
-  const findMatch = async () => {
+  useEffect(() => {
+    statusRef.current = status;
+  }, [status]);
+
+  // Updated: findMatch now accepts a queue type
+  const findMatch = async (queueType = "3x3") => {
     if (!user) return;
     setStatus("searching");
     setError(null);
 
     try {
-      // 1. Simple matchmaking: Fetch recent rooms to find a waiting one
-      // Note: In production, use a Cloud Function or real-time queue
       const roomsRef = collection(
         db,
         "artifacts",
@@ -497,16 +506,20 @@ const useMatchmaking = (user) => {
         "data",
         "rooms"
       );
-      const snapshot = await getDocs(roomsRef); // Fetch all rooms (limit in real app)
+      const snapshot = await getDocs(roomsRef);
 
-      // Filter in memory (Simple MVP)
+      // Filter for room matching the selected QUEUE TYPE
       const waitingRoom = snapshot.docs.find((doc) => {
         const data = doc.data();
-        return data.status === "waiting" && data.player1.uid !== user.uid;
+        return (
+          data.status === "waiting" &&
+          data.player1.uid !== user.uid &&
+          (data.type === queueType || (!data.type && queueType === "3x3"))
+        );
       });
 
       if (waitingRoom) {
-        // JOIN ROOM
+        // JOIN
         const roomRef = doc(
           db,
           "artifacts",
@@ -521,21 +534,31 @@ const useMatchmaking = (user) => {
           player2: { uid: user.uid, name: user.displayName || "Guest" },
         });
         setRoomId(waitingRoom.id);
-        setStatus("found");
+        roomIdRef.current = waitingRoom.id;
+
+        const unsubscribe = onSnapshot(roomRef, (docSnap) => {
+          if (docSnap.exists()) {
+            setRoomData(docSnap.data());
+            if (docSnap.data().status === "playing") setStatus("found");
+          }
+        });
+        searchRef.current = unsubscribe;
       } else {
-        // HOST ROOM
+        // HOST (Create with Type)
         const newRoom = await addDoc(roomsRef, {
           status: "waiting",
           createdAt: new Date().toISOString(),
           player1: { uid: user.uid, name: user.displayName || "Guest" },
-          scramble: generateScramble("3x3"), // Shared scramble
+          scramble: generateScramble(queueType),
+          type: queueType,
         });
         setRoomId(newRoom.id);
+        roomIdRef.current = newRoom.id;
 
-        // Listen for opponent
         const unsubscribe = onSnapshot(newRoom, (docSnap) => {
-          if (docSnap.exists() && docSnap.data().status === "playing") {
-            setStatus("found");
+          if (docSnap.exists()) {
+            setRoomData(docSnap.data());
+            if (docSnap.data().status === "playing") setStatus("found");
           }
         });
         searchRef.current = unsubscribe;
@@ -548,19 +571,211 @@ const useMatchmaking = (user) => {
   };
 
   const cancelSearch = async () => {
-    if (searchRef.current) searchRef.current(); // Unsubscribe
-    // Ideally delete room if hosting, skipping for brevity in hook
+    if (searchRef.current) searchRef.current();
+
+    if (roomIdRef.current && statusRef.current === "searching") {
+      try {
+        const roomRef = doc(
+          db,
+          "artifacts",
+          "cubity-v1",
+          "public",
+          "data",
+          "rooms",
+          roomIdRef.current
+        );
+        const snap = await getDoc(roomRef);
+        if (
+          snap.exists() &&
+          snap.data().status === "waiting" &&
+          snap.data().player1.uid === user.uid
+        ) {
+          await deleteDoc(roomRef);
+          console.log("Cleaned up abandoned room.");
+        }
+      } catch (e) {
+        console.warn("Cleanup ignored:", e);
+      }
+    }
+
     setStatus("idle");
     setRoomId(null);
+    setRoomData(null);
+    roomIdRef.current = null;
   };
 
-  return { status, roomId, findMatch, cancelSearch, error };
+  useEffect(() => {
+    return () => {
+      if (statusRef.current === "searching") {
+        cancelSearch();
+      }
+    };
+  }, []);
+
+  return { status, roomId, roomData, findMatch, cancelSearch, error };
 };
 
-// --- SUB-COMPONENT: ARENA VIEW (Updated) ---
+// --- SUB-COMPONENT: BATTLE ROOM (The Game) ---
+const BattleRoom = ({ user, roomData, roomId, onExit }) => {
+  const [myTime, setMyTime] = useState(null);
+  const [opponentTime, setOpponentTime] = useState(null);
+  const [result, setResult] = useState(null);
+
+  const amIPlayer1 = user.uid === roomData.player1.uid;
+  const opponentName = amIPlayer1
+    ? roomData.player2?.name
+    : roomData.player1.name;
+  const myResultField = amIPlayer1 ? "result1" : "result2";
+  const opResultField = amIPlayer1 ? "result2" : "result1";
+
+  useEffect(() => {
+    const myRes = roomData[myResultField];
+    const opRes = roomData[opResultField];
+
+    if (myRes) setMyTime(myRes);
+    if (opRes) setOpponentTime(opRes);
+
+    if (myRes && opRes) {
+      if (myRes < opRes) setResult("win");
+      else if (myRes > opRes) setResult("loss");
+      else setResult("draw");
+    }
+  }, [roomData, myResultField, opResultField]);
+
+  const onBattleSolveComplete = async (time) => {
+    const roomRef = doc(
+      db,
+      "artifacts",
+      "cubity-v1",
+      "public",
+      "data",
+      "rooms",
+      roomId
+    );
+    await updateDoc(roomRef, {
+      [myResultField]: parseFloat(time),
+    });
+  };
+
+  return (
+    <div className="w-full max-w-3xl mx-auto">
+      {/* HEADER */}
+      <div className="flex justify-between items-center mb-8 p-4 bg-slate-900/50 border border-white/10 rounded-xl">
+        <div className="flex items-center gap-3">
+          <div className="text-right">
+            <div className="text-xs text-slate-500 font-bold uppercase">
+              YOU
+            </div>
+            <div className="text-white font-bold">
+              {user.displayName || "Guest"}
+            </div>
+          </div>
+        </div>
+        <div className="text-2xl font-black italic text-slate-700">VS</div>
+        <div className="flex items-center gap-3">
+          <div className="text-left">
+            <div className="text-xs text-slate-500 font-bold uppercase">
+              OPPONENT
+            </div>
+            <div className="text-white font-bold">
+              {opponentName || "Connecting..."}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* GAME AREA */}
+      {!myTime ? (
+        <div className="mb-8">
+          <div className="text-center mb-4 text-indigo-400 text-xs font-bold uppercase tracking-widest flex items-center justify-center gap-2">
+            <Swords className="w-4 h-4" /> BATTLE SCRAMBLE
+          </div>
+
+          <TimerView
+            user={user}
+            userData={{}}
+            onSolveComplete={onBattleSolveComplete}
+            dailyMode={false}
+            isBattle={true}
+            forcedScramble={roomData.scramble}
+            forcedType={roomData.type || "3x3"}
+            disableScrambleGen={true}
+          />
+        </div>
+      ) : (
+        <div className="text-center py-12 animate-in zoom-in duration-300">
+          {result ? (
+            <>
+              {result === "win" && (
+                <Crown className="w-20 h-20 text-yellow-500 mx-auto mb-4" />
+              )}
+              {result === "loss" && (
+                <Frown className="w-20 h-20 text-slate-500 mx-auto mb-4" />
+              )}
+              <h1 className="text-5xl font-black italic text-white mb-2">
+                {result === "win"
+                  ? "VICTORY!"
+                  : result === "loss"
+                  ? "DEFEAT"
+                  : "DRAW"}
+              </h1>
+              <div className="flex justify-center gap-8 mt-8">
+                <div>
+                  <div className="text-xs text-slate-500 uppercase font-bold">
+                    You
+                  </div>
+                  <div className="text-3xl font-mono text-white">{myTime}s</div>
+                </div>
+                <div>
+                  <div className="text-xs text-slate-500 uppercase font-bold">
+                    {opponentName}
+                  </div>
+                  <div className="text-3xl font-mono text-white">
+                    {opponentTime}s
+                  </div>
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              <Activity className="w-16 h-16 text-blue-500 animate-pulse mx-auto mb-4" />
+              <h2 className="text-2xl font-bold text-white">
+                Waiting for opponent...
+              </h2>
+              <p className="text-slate-500 mt-2">You finished in {myTime}s</p>
+            </>
+          )}
+
+          {result && (
+            <button
+              onClick={onExit}
+              className="mt-12 bg-slate-800 hover:bg-slate-700 text-white px-8 py-3 rounded-xl font-bold transition-colors"
+            >
+              Leave Match
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// --- SUB-COMPONENT: ARENA VIEW (Updated for Queue Selection) ---
 const ArenaView = ({ user }) => {
-  const { status, roomId, findMatch, cancelSearch, error } =
+  const { status, roomId, roomData, findMatch, cancelSearch, error } =
     useMatchmaking(user);
+  const [queueType, setQueueType] = useState("3x3"); // Default queue
+
+  if (status === "found" && roomData) {
+    return (
+      <BattleRoom
+        user={user}
+        roomData={roomData}
+        roomId={roomId}
+        onExit={cancelSearch}
+      />
+    );
+  }
 
   return (
     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 flex flex-col items-center justify-center h-[60vh] text-center px-4">
@@ -576,12 +791,49 @@ const ArenaView = ({ user }) => {
             Race against cubers worldwide in real-time. 1v1 Ranked Battles.
           </p>
 
+          {/* QUEUE SELECTOR */}
+          <div className="flex bg-slate-900 p-1 rounded-lg border border-white/10 mb-8">
+            <button
+              onMouseUp={blurOnUI}
+              onClick={() => setQueueType("2x2")}
+              className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors ${
+                queueType === "2x2"
+                  ? "bg-blue-600 text-white"
+                  : "text-slate-500 hover:text-white"
+              }`}
+            >
+              2x2
+            </button>
+            <button
+              onMouseUp={blurOnUI}
+              onClick={() => setQueueType("3x3")}
+              className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors ${
+                queueType === "3x3"
+                  ? "bg-blue-600 text-white"
+                  : "text-slate-500 hover:text-white"
+              }`}
+            >
+              3x3
+            </button>
+            <button
+              onMouseUp={blurOnUI}
+              onClick={() => setQueueType("4x4")}
+              className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors ${
+                queueType === "4x4"
+                  ? "bg-blue-600 text-white"
+                  : "text-slate-500 hover:text-white"
+              }`}
+            >
+              4x4
+            </button>
+          </div>
+
           <div className="flex flex-col gap-3 w-full max-w-xs">
             <button
-              onClick={findMatch}
+              onClick={() => findMatch(queueType)}
               className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-4 rounded-xl font-bold shadow-lg shadow-blue-500/25 flex items-center justify-center gap-2 transition-all active:scale-95"
             >
-              <Swords className="w-5 h-5" /> FIND MATCH
+              <Swords className="w-5 h-5" /> FIND MATCH ({queueType})
             </button>
             {error && <p className="text-red-400 text-xs mt-2">{error}</p>}
           </div>
@@ -599,7 +851,7 @@ const ArenaView = ({ user }) => {
           <h2 className="text-2xl font-bold text-white mb-2">
             Searching for opponent...
           </h2>
-          <p className="text-slate-500 text-sm mb-8">Estimated wait: 5-10s</p>
+          <p className="text-slate-500 text-sm mb-8">Queue: {queueType}</p>
           <button
             onClick={cancelSearch}
             className="text-slate-400 hover:text-white text-sm font-bold uppercase tracking-wider border border-white/10 px-6 py-2 rounded-full"
@@ -1039,18 +1291,30 @@ const TimerView = ({
   onSolveComplete,
   dailyMode = false,
   recentSolves = [],
+  forcedScramble = null,
+  forcedType = null,
+  disableScrambleGen = false,
+  isBattle = false,
 }) => {
   const [time, setTime] = useState(0);
   const [timerState, setTimerState] = useState("IDLE");
   const [cubeType, setCubeType] = useState("3x3");
   const [showVis, setShowVis] = useState(false);
-  const [scramble, setScramble] = useState("");
+  const [scramble, setScramble] = useState(forcedScramble || "");
   const timerRef = useRef(null);
   const startTimeRef = useRef(0);
 
   useEffect(() => {
-    setScramble(generateScramble(cubeType, dailyMode ? getDailySeed() : null));
-  }, [cubeType, dailyMode]);
+    if (forcedType) setCubeType(forcedType);
+  }, [forcedType]);
+
+  useEffect(() => {
+    if (!disableScrambleGen && !forcedScramble) {
+      setScramble(
+        generateScramble(cubeType, dailyMode ? getDailySeed() : null)
+      );
+    }
+  }, [cubeType, dailyMode, disableScrambleGen, forcedScramble]);
 
   const ao5 = calculateAverage(recentSolves, 5);
   const ao12 = calculateAverage(recentSolves, 12);
@@ -1088,7 +1352,7 @@ const TimerView = ({
   const resetTimer = () => {
     setTimerState("IDLE");
     setTime(0);
-    if (!dailyMode) setScramble(generateScramble(cubeType));
+    if (!disableScrambleGen) setScramble(generateScramble(cubeType));
   };
 
   useEffect(() => {
@@ -1142,13 +1406,12 @@ const TimerView = ({
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
     >
-      {/* Cube Selector (Hidden during run) */}
       <div
         className={`absolute top-0 right-0 transition-opacity ${
           timerState === "RUNNING" ? "opacity-0" : "opacity-100"
         }`}
       >
-        {!dailyMode && (
+        {!dailyMode && !disableScrambleGen && !isBattle && (
           <div className="flex bg-slate-900 p-1 rounded-lg border border-white/10">
             <button
               onMouseUp={blurOnUI}
@@ -1187,7 +1450,6 @@ const TimerView = ({
         )}
       </div>
 
-      {/* Scramble */}
       <div
         className={`text-center mb-8 transition-opacity duration-300 ${
           timerState === "RUNNING" ? "opacity-0" : "opacity-100"
@@ -1209,7 +1471,7 @@ const TimerView = ({
         </div>
 
         <div className="flex justify-center gap-4 mt-4">
-          {!dailyMode && (
+          {!dailyMode && !disableScrambleGen && (
             <button
               onMouseUp={blurOnUI}
               onClick={resetTimer}
@@ -1234,7 +1496,6 @@ const TimerView = ({
         {showVis && <ScrambleVisualizer scramble={scramble} type={cubeType} />}
       </div>
 
-      {/* Main Timer */}
       <div
         className={`text-[6rem] md:text-[12rem] font-black font-mono tabular-nums leading-none tracking-tighter transition-colors duration-100 ${getTimerColor()}`}
       >
@@ -1242,46 +1503,48 @@ const TimerView = ({
       </div>
 
       {/* Session Stats Overlay */}
-      <div
-        className={`mt-12 grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-8 w-full max-w-2xl transition-opacity duration-300 ${
-          timerState === "RUNNING" ? "opacity-0" : "opacity-100"
-        }`}
-      >
-        <div className="text-center">
-          <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">
-            ao5
+      {!disableScrambleGen && !isBattle && (
+        <div
+          className={`mt-12 grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-8 w-full max-w-2xl transition-opacity duration-300 ${
+            timerState === "RUNNING" ? "opacity-0" : "opacity-100"
+          }`}
+        >
+          <div className="text-center">
+            <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">
+              ao5
+            </div>
+            <div className="text-xl font-mono font-bold text-white">{ao5}</div>
           </div>
-          <div className="text-xl font-mono font-bold text-white">{ao5}</div>
+          <div className="text-center">
+            <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">
+              ao12
+            </div>
+            <div className="text-xl font-mono font-bold text-white">{ao12}</div>
+          </div>
+          <div className="text-center">
+            <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">
+              count
+            </div>
+            <div className="text-xl font-mono font-bold text-white">
+              {recentSolves.length}
+            </div>
+          </div>
+          <div className="text-center">
+            <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">
+              best
+            </div>
+            <div className="text-xl font-mono font-bold text-white">
+              {recentSolves.length > 0
+                ? Math.min(
+                    ...recentSolves
+                      .filter((s) => s.penalty !== "DNF")
+                      .map((s) => s.time + (s.penalty === 2 ? 2 : 0))
+                  ).toFixed(2)
+                : "--"}
+            </div>
+          </div>
         </div>
-        <div className="text-center">
-          <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">
-            ao12
-          </div>
-          <div className="text-xl font-mono font-bold text-white">{ao12}</div>
-        </div>
-        <div className="text-center">
-          <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">
-            count
-          </div>
-          <div className="text-xl font-mono font-bold text-white">
-            {recentSolves.length}
-          </div>
-        </div>
-        <div className="text-center">
-          <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">
-            best
-          </div>
-          <div className="text-xl font-mono font-bold text-white">
-            {recentSolves.length > 0
-              ? Math.min(
-                  ...recentSolves
-                    .filter((s) => s.penalty !== "DNF")
-                    .map((s) => s.time + (s.penalty === 2 ? 2 : 0))
-                ).toFixed(2)
-              : "--"}
-          </div>
-        </div>
-      </div>
+      )}
 
       <div
         className={`absolute bottom-[-3rem] md:bottom-[-4rem] text-slate-600 text-xs font-bold tracking-widest uppercase animate-pulse ${
