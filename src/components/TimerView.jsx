@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Trophy, Swords, RotateCcw, Grid2x2, Box, Grid3x3 } from 'lucide-react';
-import { generateScramble, getDailySeed, getSolvedState, applyCubeMove, getInverseMove, simplifyMoveStack } from '../utils/cube';
+import { generateScramble, getDailySeed, getSolvedState, applyCubeMove, getInverseMove, simplifyMoveStack, isStateSolved } from '../utils/cube';
 import { calculateAverage } from '../utils/stats';
 import SmartCube3D from './SmartCube3D';
 
@@ -22,12 +22,16 @@ const TimerView = ({ user, userData, onSolveComplete, dailyMode = false, recentS
   const [inspectionTime, setInspectionTime] = useState(15);
   const [penalty, setPenalty] = useState(null); // null, '+2', 'DNF'
   const inspectionIntervalRef = useRef(null);
+  const lastMoveAtInspectionStart = useRef(null); // Track move that started inspection
 
   // Scramble Tracking
   const [scrambleIndex, setScrambleIndex] = useState(0);
   const [scrambleMoves, setScrambleMoves] = useState([]);
   const [correctionStack, setCorrectionStack] = useState([]); // Stack of moves to undo
   const [partialMove, setPartialMove] = useState(null); // Track halfway state of double moves (e.g. "R" of "R2")
+  
+  // Activity Feed
+  const [activityLog, setActivityLog] = useState([]);
 
   const timerRef = useRef(null);
   const startTimeRef = useRef(0);
@@ -37,6 +41,9 @@ const TimerView = ({ user, userData, onSolveComplete, dailyMode = false, recentS
     if (smartCube && smartCube.isConnected) {
         setShowSyncPrompt(true); // Show one-time sync prompt
         
+        // Force internal state to SOLVED on connection to ensure sync
+        setCurrentCubeState(getSolvedState(cubeType === '2x2' ? 2 : cubeType === '4x4' ? 4 : 3));
+
         if (smartCube.lastMove && currentCubeState) {
             // Update live state on move
             const newState = applyCubeMove(currentCubeState, smartCube.lastMove.move, cubeType);
@@ -44,8 +51,9 @@ const TimerView = ({ user, userData, onSolveComplete, dailyMode = false, recentS
             
             // Check for Solved State (Auto-Stop)
             if (timerState === 'RUNNING') {
-                const solvedState = getSolvedState(cubeType === '2x2' ? 2 : cubeType === '4x4' ? 4 : 3);
-                const isSolved = JSON.stringify(newState) === JSON.stringify(solvedState);
+                // Rely on internal state tracking (more reliable than raw facelets which can be affected by gyro drift)
+                const isSolved = isStateSolved(newState);
+                
                 if (isSolved) {
                     stopTimer();
                 }
@@ -103,8 +111,29 @@ const TimerView = ({ user, userData, onSolveComplete, dailyMode = false, recentS
     if (timerRef.current) clearInterval(timerRef.current);
     const finalTime = (Date.now() - startTimeRef.current) / 1000;
     setTimerState('STOPPED');
+    
+    // Calculate Grade
+    let grade = '';
+    const currentAo5 = calculateAverage(recentSolves, 5); // Recalculate or pass in? 
+    // Note: recentSolves here is the OLD list (before this solve). That's actually good for comparison.
+    const numAo5 = parseFloat(currentAo5);
+    
+    if (!isNaN(numAo5) && numAo5 > 0) {
+        if (finalTime < numAo5 * 0.85) grade = '!!';
+        else if (finalTime > numAo5 * 1.15) grade = '??';
+    }
+
+    // Add to Activity Feed
+    const newLog = { id: Date.now(), time: finalTime, grade, penalty };
+    setActivityLog(prev => [newLog, ...prev]);
+    
+    // Auto-remove after 5s
+    setTimeout(() => {
+        setActivityLog(prev => prev.filter(l => l.id !== newLog.id));
+    }, 5000);
+
     onSolveComplete(finalTime, scramble, dailyMode, cubeType, penalty); 
-  }, [scramble, onSolveComplete, dailyMode, cubeType, penalty]);
+  }, [scramble, onSolveComplete, dailyMode, cubeType, penalty, recentSolves]);
 
   const resetTimer = () => {
     setTimerState('IDLE');
@@ -139,6 +168,9 @@ const TimerView = ({ user, userData, onSolveComplete, dailyMode = false, recentS
 
 
 
+  // Inspection State
+  // (State declared at top of component)
+
   // Audio Alerts
   const speak = (text) => {
       if ('speechSynthesis' in window) {
@@ -152,22 +184,34 @@ const TimerView = ({ user, userData, onSolveComplete, dailyMode = false, recentS
       setInspectionTime(15);
       setPenalty(null);
       
+      // Record the move that triggered inspection so we don't immediately start solving
+      if (smartCube?.lastMove) {
+          lastMoveAtInspectionStart.current = smartCube.lastMove;
+      }
+
       inspectionIntervalRef.current = setInterval(() => {
-          setInspectionTime(prev => {
-              const next = prev - 1;
-              
-              // Audio Alerts
-              if (next === 7) speak("Eight Seconds"); // 8s elapsed (15-7=8)
-              if (next === 3) speak("Twelve Seconds"); // 12s elapsed (15-3=12)
-              
-              // Penalties
-              if (next === -1) setPenalty('+2'); // 16s elapsed
-              if (next === -3) setPenalty('DNF'); // 18s elapsed (17s limit passed)
-              
-              return next;
-          });
+          setInspectionTime(prev => prev - 1);
       }, 1000);
   };
+
+  // Audio Alerts Effect
+  useEffect(() => {
+      if (timerState === 'INSPECTION') {
+          if (inspectionTime === 8) speak("Eight Seconds"); // 7s remaining (15-8=7? No, wait. 15-7=8 elapsed)
+          // Wait, logic was: next === 7 (8s elapsed). 
+          // If inspectionTime counts DOWN from 15:
+          // 15, 14, ... 8 (7s elapsed), 7 (8s elapsed).
+          // WCA rule: "8 seconds" call at 8s elapsed (7s remaining).
+          if (inspectionTime === 7) speak("Eight Seconds"); 
+          
+          // "12 seconds" call at 12s elapsed (3s remaining).
+          if (inspectionTime === 3) speak("Twelve Seconds");
+
+          // Penalties
+          if (inspectionTime === -1) setPenalty('+2'); // 16s elapsed
+          if (inspectionTime === -3) setPenalty('DNF'); // 18s elapsed
+      }
+  }, [inspectionTime, timerState]);
 
   const stopInspection = () => {
       if (inspectionIntervalRef.current) clearInterval(inspectionIntervalRef.current);
@@ -186,16 +230,15 @@ const TimerView = ({ user, userData, onSolveComplete, dailyMode = false, recentS
   // Handle move during inspection -> Start Solve
   useEffect(() => {
       if (timerState === 'INSPECTION' && smartCube?.lastMove) {
+          // Ignore the move that started inspection
+          if (smartCube.lastMove === lastMoveAtInspectionStart.current) return;
+
           stopInspection();
           if (penalty === 'DNF') {
               setTimerState('STOPPED');
-              // Handle DNF immediately or just show it? 
-              // For now, let's just stop and show DNF.
               onSolveComplete(0, scramble, dailyMode, cubeType, 'DNF');
           } else {
               startTimer();
-              // Pass penalty to onSolveComplete when done?
-              // We need to store it to pass later.
           }
       }
   }, [smartCube?.lastMove, timerState, penalty]);
@@ -252,6 +295,9 @@ const TimerView = ({ user, userData, onSolveComplete, dailyMode = false, recentS
   // Track Scramble Progress
   useEffect(() => {
       if (smartCube && smartCube.isConnected && smartCube.lastMove && scrambleMoves.length > 0) {
+          // Stop tracking if scramble is already complete
+          if (scrambleIndex >= scrambleMoves.length) return;
+
           const userMove = smartCube.lastMove.move;
           
           // 1. Check Correction Stack first
@@ -424,7 +470,19 @@ const TimerView = ({ user, userData, onSolveComplete, dailyMode = false, recentS
 
       </div>
 
-      <div className={`text-[6rem] md:text-[12rem] font-black font-mono tabular-nums leading-none tracking-tighter transition-colors duration-100 ${getTimerColor()}`}>
+      <div className={`text-[6rem] md:text-[12rem] font-black font-mono tabular-nums leading-none tracking-tighter transition-colors duration-100 ${getTimerColor()} flex flex-col items-center`}>
+        {/* State Label */}
+        {timerState === 'INSPECTION' && (
+            <div className="text-sm md:text-base font-bold tracking-[0.5em] text-orange-500 mb-[-1rem] animate-pulse">
+                INSPECTION
+            </div>
+        )}
+        {timerState === 'RUNNING' && (
+            <div className="text-sm md:text-base font-bold tracking-[0.5em] text-green-500/50 mb-[-1rem]">
+                SOLVING
+            </div>
+        )}
+
         {timerState === 'INSPECTION' ? (
             <span className={`${inspectionTime < 0 ? 'text-red-500' : 'text-orange-400'}`}>
                 {Math.abs(inspectionTime)}
@@ -469,6 +527,24 @@ const TimerView = ({ user, userData, onSolveComplete, dailyMode = false, recentS
 
       <div className={`absolute bottom-[-3rem] md:bottom-[-4rem] text-slate-600 text-xs font-bold tracking-widest uppercase animate-pulse ${timerState === 'RUNNING' ? 'hidden' : 'block'}`}>
         {timerState === 'STOPPED' ? 'Press Space to Reset' : 'Hold Space / Touch / Turn to Start'}
+      </div>
+      <div className="absolute bottom-[-5rem] text-slate-800 text-[10px] font-mono">v1.1 (Auto-Stop Fix)</div>
+
+      {/* Activity Feed */}
+      <div className="absolute bottom-4 left-4 flex flex-col-reverse gap-2 pointer-events-none">
+          {activityLog.map(log => (
+              <div key={log.id} className="bg-slate-900/80 backdrop-blur border border-white/10 p-3 rounded-lg shadow-xl animate-in slide-in-from-bottom-4 fade-in duration-300 flex items-center gap-3">
+                  <div className="text-2xl font-mono font-bold text-white">
+                      {log.time.toFixed(2)}
+                      {log.penalty && <span className="text-red-500 text-sm ml-1">{log.penalty}</span>}
+                  </div>
+                  {log.grade && (
+                      <div className={`text-xl font-black italic ${log.grade === '!!' ? 'text-green-400' : 'text-red-400'}`}>
+                          {log.grade}
+                      </div>
+                  )}
+              </div>
+          ))}
       </div>
     </div>
   );
