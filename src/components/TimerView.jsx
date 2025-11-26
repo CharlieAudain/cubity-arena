@@ -32,6 +32,9 @@ const TimerView = ({ user, userData, onSolveComplete, dailyMode = false, recentS
   
   // Activity Feed
   const [activityLog, setActivityLog] = useState([]);
+  
+  // Solution Tracking
+  const [solutionMoves, setSolutionMoves] = useState([]);
 
   const timerRef = useRef(null);
   const startTimeRef = useRef(0);
@@ -48,6 +51,11 @@ const TimerView = ({ user, userData, onSolveComplete, dailyMode = false, recentS
             // Update live state on move
             const newState = applyCubeMove(currentCubeState, smartCube.lastMove.move, cubeType);
             setCurrentCubeState(newState);
+            
+            // Track Solution Moves
+            if (timerState === 'RUNNING') {
+                setSolutionMoves(prev => [...prev, smartCube.lastMove.move]);
+            }
             
             // Check for Solved State (Auto-Stop)
             if (timerState === 'RUNNING') {
@@ -132,12 +140,19 @@ const TimerView = ({ user, userData, onSolveComplete, dailyMode = false, recentS
         setActivityLog(prev => prev.filter(l => l.id !== newLog.id));
     }, 5000);
 
-    onSolveComplete(finalTime, scramble, dailyMode, cubeType, penalty); 
-  }, [scramble, onSolveComplete, dailyMode, cubeType, penalty, recentSolves]);
+    // Construct Detailed Data
+    const detailedData = {
+        solution: solutionMoves.join(' '),
+        splits: null // Placeholder for future CFOP analysis
+    };
+
+    onSolveComplete(finalTime, scramble, dailyMode, cubeType, penalty, detailedData); 
+  }, [scramble, onSolveComplete, dailyMode, cubeType, penalty, recentSolves, solutionMoves]);
 
   const resetTimer = () => {
     setTimerState('IDLE');
     setTime(0);
+    setSolutionMoves([]); // Reset solution tracking
     if (!disableScrambleGen) setScramble(generateScramble(cubeType));
   };
 

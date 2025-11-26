@@ -162,17 +162,24 @@ export default function App() {
     } catch (err) { console.error("Name Update Error:", err); setNameError("Save failed."); }
   };
 
-  const onSolveComplete = async (time, scramble, isDaily, type = '3x3') => {
+  const onSolveComplete = async (time, scramble, isDaily, type = '3x3', penalty = 0, detailedData = null) => {
     if (!user) return;
     const now = new Date();
     try {
-      await addDoc(collection(db, 'artifacts', 'cubity-v1', 'users', user.uid, 'solves'), {
+      const solveData = {
         time: parseFloat(time),
         scramble: scramble,
         timestamp: now.toISOString(),
-        penalty: 0,
-        type: isDaily ? 'daily' : type // Save type!
-      });
+        penalty: penalty || 0,
+        type: isDaily ? 'daily' : type
+      };
+
+      if (detailedData) {
+          solveData.solution = detailedData.solution;
+          solveData.splits = detailedData.splits;
+      }
+
+      await addDoc(collection(db, 'artifacts', 'cubity-v1', 'users', user.uid, 'solves'), solveData);
 
       const userRef = doc(db, 'artifacts', 'cubity-v1', 'users', user.uid, 'profile', 'main');
       const lastActiveDate = new Date(userData.lastActive);
