@@ -102,6 +102,24 @@ const StatsView = ({ userId }) => {
                 <div className="text-xs font-bold text-slate-500 uppercase mb-2">Scramble</div>
                 <div className="font-mono text-white break-words text-lg">{selectedSolve.scramble}</div>
               </div>
+
+              {selectedSolve.solution && (
+                  <div className="bg-black/20 rounded-xl p-4 border border-white/5">
+                    <div className="text-xs font-bold text-blue-400 uppercase mb-2">Reconstruction</div>
+                    <div className="font-mono text-blue-100 break-words text-sm leading-relaxed tracking-wide">
+                        {selectedSolve.solution}
+                    </div>
+                  </div>
+              )}
+
+              {selectedSolve.splits && (
+                  <div className="bg-black/20 rounded-xl p-4 border border-white/5">
+                    <div className="text-xs font-bold text-green-400 uppercase mb-2">Splits</div>
+                    <div className="font-mono text-slate-400 text-xs">
+                        {JSON.stringify(selectedSolve.splits, null, 2)}
+                    </div>
+                  </div>
+              )}
               <button onMouseUp={blurOnUI} onClick={deleteSolve} className="w-full py-3 bg-red-500/10 text-red-400 rounded-lg font-bold border border-red-500/20 flex justify-center gap-2 hover:bg-red-500/20"><Trash2 className="w-4 h-4" /> Delete Solve</button>
             </div>
           </div>
