@@ -131,6 +131,61 @@ const TimerView = ({ user, userData, onSolveComplete, dailyMode = false, recentS
     else if (timerState === 'HOLDING') setTimerState('IDLE');
   };
 
+  // Scramble Tracking
+  const [scrambleIndex, setScrambleIndex] = useState(0);
+  const [scrambleMoves, setScrambleMoves] = useState([]);
+
+  useEffect(() => {
+      if (scramble) {
+          setScrambleMoves(scramble.split(" ").filter(m => m));
+          setScrambleIndex(0);
+      }
+  }, [scramble]);
+
+  // Track Scramble Progress
+  useEffect(() => {
+      if (smartCube && smartCube.isConnected && smartCube.lastMove && scrambleMoves.length > 0) {
+          const targetMove = scrambleMoves[scrambleIndex];
+          const userMove = smartCube.lastMove.move;
+          
+          // Simple matching: if user does the move, advance.
+          // Note: This is basic. Real scrambling might need to handle R vs R' vs R2 nuances more robustly.
+          // For now, we assume the user follows the notation.
+          if (targetMove === userMove) {
+              setScrambleIndex(prev => Math.min(prev + 1, scrambleMoves.length));
+          } else if (targetMove && (targetMove.includes("2") && userMove === targetMove[0])) {
+               // Handle partial R2 (if user does R, we might wait for another R? Or just ignore?)
+               // For simplicity in this MVP, we require exact match or we don't advance.
+          }
+      }
+  }, [smartCube?.lastMove]);
+
+  // Render Interactive Scramble
+  const renderScramble = () => {
+      if (!smartCube || !smartCube.isConnected) return scramble;
+
+      return (
+          <div className="flex flex-wrap justify-center gap-x-3 gap-y-2">
+              {scrambleMoves.map((move, idx) => {
+                  const isDone = idx < scrambleIndex;
+                  const isCurrent = idx === scrambleIndex;
+                  return (
+                      <span key={idx} className={`
+                          font-mono transition-all duration-200
+                          ${isDone ? 'text-green-500/30 scale-90' : ''}
+                          ${isCurrent ? 'text-blue-400 font-bold scale-125 mx-2' : 'text-slate-500'}
+                      `}>
+                          {move}
+                      </span>
+                  );
+              })}
+              {scrambleIndex === scrambleMoves.length && (
+                  <span className="text-green-400 font-bold ml-4 animate-pulse">SCRAMBLED!</span>
+              )}
+          </div>
+      );
+  };
+
   return (
     <div 
       className="flex flex-col items-center justify-center min-h-[50vh] outline-none select-none touch-none relative"
@@ -151,8 +206,8 @@ const TimerView = ({ user, userData, onSolveComplete, dailyMode = false, recentS
         <div className="flex items-center justify-center gap-2 mb-4 text-slate-500 text-xs font-bold uppercase tracking-widest">
           {dailyMode ? <span className="text-indigo-400 flex gap-2 items-center"><Trophy className="w-4 h-4" /> DAILY CHALLENGE</span> : <><Swords className="w-4 h-4" /> {cubeType} Scramble</>}
         </div>
-        <div className="text-xl md:text-3xl font-mono font-medium text-slate-300 max-w-3xl leading-relaxed px-4 text-center mx-auto">
-          {scramble}
+        <div className="text-xl md:text-3xl font-mono font-medium text-slate-300 max-w-3xl leading-relaxed px-4 text-center mx-auto min-h-[3rem] flex items-center justify-center">
+          {renderScramble()}
         </div>
         
 
