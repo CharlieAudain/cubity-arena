@@ -1,12 +1,13 @@
-import React, { useState, useEffect } from 'react';
 import { 
-  X, Trash2, Calendar, Box, TrendingUp, Grid2x2, Grid3x3, ChevronRight 
+  X, Trash2, Calendar, Box, TrendingUp, Grid2x2, Grid3x3, ChevronRight, Play, Pause, SkipBack, SkipForward 
 } from 'lucide-react';
 import { 
   doc, updateDoc, deleteDoc, collection, query, orderBy, limit, onSnapshot 
 } from 'firebase/firestore'; 
 import { db } from '../lib/firebase'; 
 import { calculateAverage, calculateBestAverage } from '../utils/stats';
+import { simplifyMoveStack, getSolvedState, applyCubeMove } from '../utils/cube';
+import SmartCube3D from './SmartCube3D';
 
 const blurOnUI = (e) => {
   e.currentTarget.blur();
@@ -20,6 +21,12 @@ const StatsView = ({ userId }) => {
   const [selectedSolve, setSelectedSolve] = useState(null); 
   const [filterType, setFilterType] = useState('all'); 
   const [statsMode, setStatsMode] = useState('current'); 
+  
+  // Playback State
+  const [optimizedSolution, setOptimizedSolution] = useState([]);
+  const [playbackIndex, setPlaybackIndex] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [playbackState, setPlaybackState] = useState(null); // Current cube state for playback 
 
   useEffect(() => {
     if (!userId) return;
@@ -39,6 +46,69 @@ const StatsView = ({ userId }) => {
     }
     setFilteredSolves(filtered.slice(0, viewLimit));
   }, [solves, filterType, viewLimit]);
+
+  // Optimize Solution when selected
+  useEffect(() => {
+      if (selectedSolve && selectedSolve.solution) {
+          const rawMoves = selectedSolve.solution.split(' ');
+          // Optimize: reduce redundant moves (e.g. R R -> R2)
+          // We can use simplifyMoveStack iteratively
+          let optimized = [];
+          rawMoves.forEach(move => {
+              optimized = simplifyMoveStack(optimized, move);
+          });
+          setOptimizedSolution(optimized);
+          setPlaybackIndex(0);
+          setIsPlaying(false);
+          
+          // Initialize playback state (Scrambled)
+          let state = getSolvedState(3); // Start solved
+          // Apply scramble
+          if (selectedSolve.scramble) {
+              selectedSolve.scramble.split(' ').forEach(m => {
+                  state = applyCubeMove(state, m, '3x3');
+              });
+          }
+          setPlaybackState(state);
+      }
+  }, [selectedSolve]);
+
+  // Handle Playback Tick
+  useEffect(() => {
+      let interval;
+      if (isPlaying && playbackIndex < optimizedSolution.length) {
+          interval = setInterval(() => {
+              setPlaybackIndex(prev => {
+                  if (prev >= optimizedSolution.length - 1) {
+                      setIsPlaying(false);
+                      return prev + 1;
+                  }
+                  return prev + 1;
+              });
+          }, 500); // 2 moves per second
+      }
+      return () => clearInterval(interval);
+  }, [isPlaying, playbackIndex, optimizedSolution]);
+
+  // Update Cube State based on Playback Index
+  useEffect(() => {
+      if (!selectedSolve) return;
+      
+      let state = getSolvedState(3);
+      // 1. Apply Scramble
+      if (selectedSolve.scramble) {
+          selectedSolve.scramble.split(' ').forEach(m => {
+              state = applyCubeMove(state, m, '3x3');
+          });
+      }
+      // 2. Apply Solution up to current index
+      for (let i = 0; i < playbackIndex; i++) {
+          if (optimizedSolution[i]) {
+              state = applyCubeMove(state, optimizedSolution[i], '3x3');
+          }
+      }
+      setPlaybackState(state);
+  }, [playbackIndex, selectedSolve, optimizedSolution]);
 
   const displayAo5 = statsMode === 'current' 
     ? calculateAverage(filteredSolves, 5) 
@@ -105,9 +175,33 @@ const StatsView = ({ userId }) => {
 
               {selectedSolve.solution && (
                   <div className="bg-black/20 rounded-xl p-4 border border-white/5">
-                    <div className="text-xs font-bold text-blue-400 uppercase mb-2">Reconstruction</div>
-                    <div className="font-mono text-blue-100 break-words text-sm leading-relaxed tracking-wide">
-                        {selectedSolve.solution}
+                    <div className="flex justify-between items-center mb-4">
+                        <div className="text-xs font-bold text-blue-400 uppercase">Reconstruction</div>
+                        <div className="flex gap-2">
+                            <button onClick={() => { setPlaybackIndex(0); setIsPlaying(false); }} className="p-1 hover:bg-white/10 rounded"><SkipBack className="w-4 h-4 text-slate-400" /></button>
+                            <button onClick={() => setIsPlaying(!isPlaying)} className="p-1 hover:bg-white/10 rounded">
+                                {isPlaying ? <Pause className="w-4 h-4 text-white" /> : <Play className="w-4 h-4 text-white" />}
+                            </button>
+                            <button onClick={() => setPlaybackIndex(optimizedSolution.length)} className="p-1 hover:bg-white/10 rounded"><SkipForward className="w-4 h-4 text-slate-400" /></button>
+                        </div>
+                    </div>
+                    
+                    {/* 3D Cube Preview */}
+                    <div className="h-48 mb-4 relative">
+                        <SmartCube3D 
+                            cubeState={playbackState} 
+                            lastMove={null} // No live moves
+                            isConnected={false}
+                        />
+                    </div>
+
+                    {/* Moves List */}
+                    <div className="font-mono text-blue-100 break-words text-sm leading-relaxed tracking-wide max-h-32 overflow-y-auto p-2 bg-black/20 rounded">
+                        {optimizedSolution.map((move, i) => (
+                            <span key={i} className={`inline-block mr-2 px-1 rounded ${i === playbackIndex - 1 ? 'bg-blue-500 text-white font-bold' : 'text-slate-400'}`}>
+                                {move}
+                            </span>
+                        ))}
                     </div>
                   </div>
               )}
