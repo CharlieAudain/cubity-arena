@@ -162,9 +162,11 @@ import Cube3D from './Cube3D';
 
         <div className="flex justify-center gap-4 mt-4">
           {!dailyMode && !disableScrambleGen && <button onMouseUp={blurOnUI} onClick={resetTimer} className="text-slate-600 hover:text-white transition-colors"><RotateCcw className="w-5 h-5" /></button>}
-          <button onMouseUp={blurOnUI} onClick={() => setShow2D(!show2D)} className={`text-xs font-bold px-3 py-1 rounded-full border ${show2D ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'text-slate-600 border-white/5'}`}>
-            {show2D ? 'Hide Net' : 'Show Net'}
-          </button>
+          {(!smartCube || !smartCube.isConnected) && (
+              <button onMouseUp={blurOnUI} onClick={() => setShow2D(!show2D)} className={`text-xs font-bold px-3 py-1 rounded-full border ${show2D ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'text-slate-600 border-white/5'}`}>
+                {show2D ? 'Hide Net' : 'Show Net'}
+              </button>
+          )}
         </div>
 
         {/* 3D CUBE (Main View) */}
@@ -179,7 +181,7 @@ import Cube3D from './Cube3D';
 
         {/* 2D NET (Optional Side View) */}
         {show2D && (
-            <div className="absolute top-0 right-[-100px] hidden xl:block opacity-50 hover:opacity-100 transition-opacity">
+            <div className="absolute top-24 right-[-120px] hidden xl:block opacity-50 hover:opacity-100 transition-opacity">
                  <ScrambleVisualizer scramble={scramble} type={cubeType} customState={currentCubeState} />
             </div>
         )}
