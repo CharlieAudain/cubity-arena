@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Swords, Crown, Frown, Activity, Clock, Zap } from 'lucide-react';
+import { Swords, Crown, Frown, Activity, Clock, Zap, X } from 'lucide-react';
 import TimerView from './TimerView';
 import SmartCube3D from './SmartCube3D';
 import { getSolvedState, applyCubeMove } from '../utils/cube';
 import { useWebRTC } from '../hooks/useWebRTC';
 import { useSocket } from '../hooks/useSocket';
+import { doc, deleteDoc } from 'firebase/firestore';
+import { db } from '../lib/firebase';
 
 const BattleRoom = ({ user, roomData, roomId, onExit, smartCube }) => {
     const [myTime, setMyTime] = useState(null);
@@ -30,14 +32,23 @@ const BattleRoom = ({ user, roomData, roomId, onExit, smartCube }) => {
         if (!socket) return;
         
         socket.on('opponent_left', () => {
-            alert("Opponent disconnected!");
-            onExit();
+            console.log('⚠️ Opponent disconnected! Waiting 15s for rejoin...');
+            
+            // Give opponent 15 seconds to rejoin before auto-leaving
+            const disconnectTimer = setTimeout(async () => {
+                console.log('🗑️ Opponent did not rejoin. Auto-leaving room...');
+                alert("Opponent disconnected and did not rejoin.");
+                await handleLeave();
+            }, 15000); // 15 seconds
+
+            // If component unmounts, clear the timer
+            return () => clearTimeout(disconnectTimer);
         });
 
         return () => {
             socket.off('opponent_left');
         };
-    }, [socket, onExit]);
+    }, [socket]);
 
     // Handle WebRTC Messages
     useEffect(() => {
@@ -105,10 +116,32 @@ const BattleRoom = ({ user, roomData, roomId, onExit, smartCube }) => {
         setMyTime(parseFloat(time));
     }, [rtcStatus, sendRtcMessage]);
 
-    const handleLeave = () => {
+    const handleLeave = async () => {
+        try {
+            // Delete room from Firestore
+            const roomRef = doc(db, 'artifacts', 'cubity-v1', 'public', 'data', 'rooms', roomId);
+            await deleteDoc(roomRef);
+            console.log(`🗑️ Deleted room ${roomId} from Firestore`);
+        } catch (err) {
+            console.error('Error deleting room:', err);
+        }
+        
         socket.emit('leave_room', { roomId });
         onExit();
     };
+
+    // Auto-cleanup: Delete room 30s after winner is decided
+    useEffect(() => {
+        if (result) {
+            console.log(`⏱️ Winner decided! Auto-deleting room in 30s...`);
+            const timer = setTimeout(async () => {
+                console.log(`🗑️ Auto-deleting room ${roomId} after 30s`);
+                await handleLeave();
+            }, 30000); // 30 seconds
+
+            return () => clearTimeout(timer);
+        }
+    }, [result, roomId]);
 
     return (
         <div className="w-full max-w-6xl mx-auto px-4">
@@ -246,11 +279,27 @@ const BattleRoom = ({ user, roomData, roomId, onExit, smartCube }) => {
                 </div>
             )}
             
-            {/* Manual Leave Button (if not finished) */}
+            {/* Leave Button - Desktop & Mobile */}
             {!result && (
-                <button onClick={handleLeave} className="fixed bottom-4 right-4 text-xs text-slate-500 hover:text-white underline">
-                    Leave Match
-                </button>
+                <>
+                    {/* Desktop: Top-right corner */}
+                    <button 
+                        onClick={handleLeave} 
+                        className="hidden md:flex fixed top-24 right-6 items-center gap-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 px-4 py-3 rounded-xl font-bold transition-colors z-50"
+                    >
+                        <X className="w-4 h-4" />
+                        Leave Match
+                    </button>
+                    
+                    {/* Mobile: Bottom button */}
+                    <button 
+                        onClick={handleLeave} 
+                        className="md:hidden fixed bottom-24 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 px-6 py-3 rounded-full font-bold transition-colors z-50 shadow-lg"
+                    >
+                        <X className="w-4 h-4" />
+                        Leave
+                    </button>
+                </>
             )}
         </div>
     );
