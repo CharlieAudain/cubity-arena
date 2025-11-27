@@ -17,11 +17,11 @@ const EmailPasswordAuth = ({ onClose, user }) => {
         setLoading(true);
 
         try {
-            if (isGuest) {
-                // Guest converting to full account
+            if (user) {
+                // Link credential to existing account (Guest or Google user)
                 const credential = EmailAuthProvider.credential(email, password);
                 await linkWithCredential(user, credential);
-                console.log('✅ Guest account converted to email/password account');
+                console.log('✅ Account linked with email/password');
             } else if (isSignUp) {
                 // New user signing up
                 await createUserWithEmailAndPassword(auth, email, password);
@@ -58,12 +58,14 @@ const EmailPasswordAuth = ({ onClose, user }) => {
 
     const getTitle = () => {
         if (isGuest) return 'Convert Guest to Full Account';
+        if (user) return 'Set Account Password';
         return isSignUp ? 'Create Account' : 'Sign In';
     };
 
     const getButtonText = () => {
         if (loading) return 'Loading...';
         if (isGuest) return 'Convert Account';
+        if (user) return 'Set Password';
         return isSignUp ? 'Create Account' : 'Sign In';
     };
 
