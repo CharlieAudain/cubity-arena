@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  Users, Zap, Settings, Timer, LogIn, Activity, Bluetooth, Flame, LogOut, Swords, AlertCircle, TrendingUp, Trophy 
+  Users, Zap, Settings, Timer, LogIn, Activity, Bluetooth, Flame, LogOut, Swords, AlertCircle, TrendingUp, Trophy, Shield 
 } from 'lucide-react';
 import { 
   onAuthStateChanged, signInAnonymously, signOut, GoogleAuthProvider, signInWithPopup, linkWithPopup 
@@ -15,6 +15,7 @@ import StatsView from './components/StatsView';
 import ArenaView from './components/ArenaView';
 import LogoVelocity from './components/LogoVelocity';
 import EmailPasswordAuth from './components/EmailPasswordAuth';
+import AdminDashboard from './components/AdminDashboard';
 import { useSmartCube } from './hooks/useSmartCube';
 import { blurOnUI } from './utils/ui';
 
@@ -31,7 +32,8 @@ export default function App() {
   const [nameError, setNameError] = useState(null); 
   const [dailyCompleted, setDailyCompleted] = useState(false);
   const [recentSolves, setRecentSolves] = useState([]);
-  const [showEmailAuth, setShowEmailAuth] = useState(false); 
+  const [showEmailAuth, setShowEmailAuth] = useState(false);
+  const [showAdminDashboard, setShowAdminDashboard] = useState(false); 
 
   // SMART CUBE HOOK
   const smartCube = useSmartCube();
@@ -303,9 +305,10 @@ export default function App() {
                   )}
                   {isAdmin() && (
                     <>
-                      <div className="px-4 py-2 text-xs font-bold text-purple-400 uppercase tracking-wider">
-                        Admin Tools
-                      </div>
+                      <button onMouseUp={blurOnUI} onClick={() => setShowAdminDashboard(true)} className="w-full flex items-center gap-2 px-4 py-3 text-sm text-purple-400 hover:bg-purple-500/10 hover:text-purple-300 rounded-lg transition-colors font-medium">
+                        <Shield className="w-4 h-4" />
+                        <span>Admin Dashboard</span>
+                      </button>
                       <div className="h-px bg-white/10 my-1"></div>
                     </>
                   )}
@@ -527,6 +530,14 @@ export default function App() {
         <EmailPasswordAuth 
           onClose={() => setShowEmailAuth(false)} 
           user={user}
+        />
+      )}
+
+      {/* Admin Dashboard Modal */}
+      {showAdminDashboard && isAdmin() && (
+        <AdminDashboard 
+          user={user}
+          onClose={() => setShowAdminDashboard(false)}
         />
       )}
 
