@@ -144,16 +144,6 @@ export default function App() {
     // Check environment variable for admin emails
     const adminEmails = import.meta.env.VITE_ADMIN_EMAILS?.split(',').map(e => e.trim()) || [];
     
-    // Debug logging (remove in production)
-    if (import.meta.env.DEV) {
-      console.log('🔍 Admin Check:', {
-        userEmail: user.email,
-        adminEmails: adminEmails,
-        envVar: import.meta.env.VITE_ADMIN_EMAILS,
-        isMatch: adminEmails.includes(user.email)
-      });
-    }
-    
     // Check if user email is in admin list
     return adminEmails.includes(user.email);
   };
