@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  Users, Zap, Settings, Timer, LogIn, Activity, Bluetooth, Flame, LogOut, Swords, AlertCircle, TrendingUp, Trophy, Shield 
+  Users, Zap, Settings, Timer, LogIn, Activity, Bluetooth, Flame, LogOut, Swords, AlertCircle, TrendingUp, Trophy, Shield, User 
 } from 'lucide-react';
 import { 
   onAuthStateChanged, signInAnonymously, signOut, GoogleAuthProvider, signInWithPopup, linkWithPopup 
@@ -16,6 +16,7 @@ import ArenaView from './components/ArenaView';
 import LogoVelocity from './components/LogoVelocity';
 import EmailPasswordAuth from './components/EmailPasswordAuth';
 import AdminDashboard from './components/AdminDashboard';
+import UsernameSetup from './components/UsernameSetup';
 import { useSmartCube } from './hooks/useSmartCube';
 import { blurOnUI } from './utils/ui';
 
@@ -166,25 +167,81 @@ export default function App() {
     setNameError(null);
     const cleanName = tempName.trim();
     const cleanId = cleanName.toLowerCase(); 
-    if (!user || cleanName.length < 3) { setNameError("Name must be 3+ chars."); return; }
-    if (cleanName === userData.displayName) { setIsEditingName(false); return; }
+    
+    // Validation
+    if (!user || cleanName.length < 3) { 
+      setNameError("Username must be at least 3 characters"); 
+      return; 
+    }
+    
+    if (cleanName.length > 20) {
+      setNameError("Username must be 20 characters or less");
+      return;
+    }
+    
+    if (!/^[a-zA-Z0-9_-]+$/.test(cleanName)) {
+      setNameError("Username can only contain letters, numbers, hyphens, and underscores");
+      return;
+    }
+    
+    if (cleanName === userData.displayName) { 
+      setIsEditingName(false); 
+      return; 
+    }
+
+    // Check cooldown (30 days) for non-admins
+    if (!isAdmin()) {
+      const lastChange = userData?.lastUsernameChange;
+      const thirtyDaysAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
+      
+      if (lastChange && new Date(lastChange).getTime() > thirtyDaysAgo) {
+        const daysLeft = Math.ceil((new Date(lastChange).getTime() - thirtyDaysAgo) / (24 * 60 * 60 * 1000));
+        setNameError(`You can change your username again in ${daysLeft} days`);
+        return;
+      }
+    }
 
     try {
+      // Check if new username is available
       const usernameRef = doc(db, 'artifacts', 'cubity-v1', 'public', 'data', 'usernames', cleanId);
       const usernameSnap = await getDoc(usernameRef);
-      if (usernameSnap.exists()) { setNameError("Username is taken!"); return; }
+      if (usernameSnap.exists() && usernameSnap.data().uid !== user.uid) { 
+        setNameError("Username is already taken"); 
+        return; 
+      }
+      
+      // Create new username entry
       await setDoc(usernameRef, { uid: user.uid });
+      
+      // Delete old username entry
       if (userData.displayName && userData.displayName !== "Guest Cuber") {
         try {
           const oldId = userData.displayName.toLowerCase();
-          if (oldId !== cleanId) await deleteDoc(doc(db, 'artifacts', 'cubity-v1', 'public', 'data', 'usernames', oldId));
-        } catch (deleteErr) { console.warn("Delete old name err:", deleteErr); }
+          if (oldId !== cleanId) {
+            await deleteDoc(doc(db, 'artifacts', 'cubity-v1', 'public', 'data', 'usernames', oldId));
+          }
+        } catch (deleteErr) { 
+          console.warn("Delete old username error:", deleteErr); 
+        }
       }
+      
+      // Update user profile with new username and timestamp
       const userRef = doc(db, 'artifacts', 'cubity-v1', 'users', user.uid, 'profile', 'main');
-      await updateDoc(userRef, { displayName: cleanName });
-      setUserData(prev => ({ ...prev, displayName: cleanName }));
+      await updateDoc(userRef, { 
+        displayName: cleanName,
+        lastUsernameChange: new Date().toISOString()
+      });
+      
+      setUserData(prev => ({ 
+        ...prev, 
+        displayName: cleanName,
+        lastUsernameChange: new Date().toISOString()
+      }));
       setIsEditingName(false);
-    } catch (err) { console.error("Name Update Error:", err); setNameError("Save failed."); }
+    } catch (err) { 
+      console.error("Username update error:", err); 
+      setNameError("Failed to save username"); 
+    }
   };
 
   const onSolveComplete = async (time, scramble, isDaily, type = '3x3', penalty = 0, detailedData = null) => {
@@ -502,6 +559,80 @@ export default function App() {
                     ) : (
                         <div className="text-sm text-slate-500 italic">
                             No cube MAC address saved. Connect a cube to save it.
+                        </div>
+                    )}
+                </div>
+
+                {/* Username Section */}
+                <div className="bg-slate-900 border border-white/10 rounded-xl p-6 mb-6">
+                    <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                        <User className="w-5 h-5 text-green-400" /> Username
+                    </h3>
+                    
+                    <div className="mb-4">
+                        <div className="text-sm text-slate-400 mb-2">Current Username:</div>
+                        <div className="font-bold text-white text-lg">{userData?.displayName || 'Not set'}</div>
+                    </div>
+
+                    {isEditingName ? (
+                        <div className="space-y-3">
+                            <input
+                                type="text"
+                                value={tempName}
+                                onChange={(e) => setTempName(e.target.value)}
+                                placeholder="new-username"
+                                minLength={3}
+                                maxLength={20}
+                                className="w-full px-4 py-3 bg-slate-800 border border-white/10 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-green-500 transition-colors"
+                            />
+                            {nameError && (
+                                <div className="text-red-400 text-sm">{nameError}</div>
+                            )}
+                            <div className="flex gap-2">
+                                <button
+                                    onClick={saveName}
+                                    className="flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-3 rounded-lg font-bold transition-colors"
+                                >
+                                    Save
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        setIsEditingName(false);
+                                        setTempName(userData?.displayName || '');
+                                        setNameError(null);
+                                    }}
+                                    className="flex-1 bg-slate-800 hover:bg-slate-700 text-white px-4 py-3 rounded-lg font-bold transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                            </div>
+                        </div>
+                    ) : (
+                        <button
+                            onClick={() => {
+                                // Check cooldown (30 days = 30 * 24 * 60 * 60 * 1000 ms)
+                                const lastChange = userData?.lastUsernameChange;
+                                const thirtyDaysAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
+                                
+                                if (!isAdmin() && lastChange && new Date(lastChange).getTime() > thirtyDaysAgo) {
+                                    const daysLeft = Math.ceil((new Date(lastChange).getTime() - thirtyDaysAgo) / (24 * 60 * 60 * 1000));
+                                    setNameError(`You can change your username again in ${daysLeft} days`);
+                                    return;
+                                }
+                                
+                                setTempName(userData?.displayName || '');
+                                setIsEditingName(true);
+                                setNameError(null);
+                            }}
+                            className="w-full bg-slate-800 hover:bg-slate-700 text-white px-4 py-3 rounded-lg font-bold transition-colors flex items-center justify-center gap-2"
+                        >
+                            <User className="w-4 h-4" /> Change Username
+                        </button>
+                    )}
+                    
+                    {!isAdmin() && userData?.lastUsernameChange && (
+                        <div className="mt-3 text-xs text-slate-500">
+                            Last changed: {new Date(userData.lastUsernameChange).toLocaleDateString()}
                         </div>
                     )}
                 </div>

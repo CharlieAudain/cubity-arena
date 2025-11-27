@@ -89,33 +89,83 @@ const AdminDashboard = ({ user, onClose }) => {
                 return;
             }
 
-            // Check if new username is available
+            // Get the UID from old username (user who will receive the new username)
+            const recipientUid = oldUsernameSnap.data().uid;
+
+            // Check if new username is taken
             const newUsernameRef = doc(db, 'artifacts', 'cubity-v1', 'public', 'data', 'usernames', newUsernameId);
             const newUsernameSnap = await getDoc(newUsernameRef);
 
+            let displacedUid = null;
+            let displacedUsername = null;
+
             if (newUsernameSnap.exists()) {
-                setError(`Username "${newUsername}" is already taken`);
-                setTransferLoading(false);
-                return;
+                // New username is taken - need to displace that user
+                displacedUid = newUsernameSnap.data().uid;
+                
+                // Generate unique member# username
+                let memberNumber = Math.floor(Math.random() * 1000000);
+                let memberUsername = `member${memberNumber}`;
+                let memberUsernameId = memberUsername.toLowerCase();
+                
+                // Keep trying until we find an available member# username
+                let attempts = 0;
+                while (attempts < 100) {
+                    const memberRef = doc(db, 'artifacts', 'cubity-v1', 'public', 'data', 'usernames', memberUsernameId);
+                    const memberSnap = await getDoc(memberRef);
+                    
+                    if (!memberSnap.exists()) {
+                        // Found available member# username
+                        displacedUsername = memberUsername;
+                        break;
+                    }
+                    
+                    // Try next number
+                    memberNumber++;
+                    memberUsername = `member${memberNumber}`;
+                    memberUsernameId = memberUsername.toLowerCase();
+                    attempts++;
+                }
+                
+                if (!displacedUsername) {
+                    setError('Failed to generate unique member# username');
+                    setTransferLoading(false);
+                    return;
+                }
+                
+                // Create member# username for displaced user
+                const displacedUsernameRef = doc(db, 'artifacts', 'cubity-v1', 'public', 'data', 'usernames', memberUsernameId);
+                await setDoc(displacedUsernameRef, { uid: displacedUid });
+                
+                // Update displaced user's profile
+                const displacedProfileRef = doc(db, 'artifacts', 'cubity-v1', 'users', displacedUid, 'profile', 'main');
+                await setDoc(displacedProfileRef, {
+                    displayName: displacedUsername,
+                    lastUsernameChange: new Date().toISOString(),
+                    displacedBy: user.email,
+                    displacedAt: new Date().toISOString()
+                }, { merge: true });
             }
 
-            // Get the UID from old username
-            const uid = oldUsernameSnap.data().uid;
-
-            // Create new username entry
-            await updateDoc(newUsernameRef, { uid });
+            // Transfer new username to recipient
+            await setDoc(newUsernameRef, { uid: recipientUid });
 
             // Delete old username entry
             await deleteDoc(oldUsernameRef);
 
-            // Update user profile
-            const userProfileRef = doc(db, 'artifacts', 'cubity-v1', 'users', uid, 'profile', 'main');
-            await updateDoc(userProfileRef, {
+            // Update recipient's profile
+            const recipientProfileRef = doc(db, 'artifacts', 'cubity-v1', 'users', recipientUid, 'profile', 'main');
+            await setDoc(recipientProfileRef, {
                 displayName: newUsername,
-                updatedAt: new Date().toISOString()
-            });
+                lastUsernameChange: new Date().toISOString()
+            }, { merge: true });
 
-            setSuccess(`✅ Username transferred from "${oldUsername}" to "${newUsername}"`);
+            if (displacedUsername) {
+                setSuccess(`✅ Username transferred from "${oldUsername}" to "${newUsername}". Previous owner of "${newUsername}" was reassigned to "${displacedUsername}"`);
+            } else {
+                setSuccess(`✅ Username transferred from "${oldUsername}" to "${newUsername}"`);
+            }
+            
             setOldUsername('');
             setNewUsername('');
         } catch (err) {
