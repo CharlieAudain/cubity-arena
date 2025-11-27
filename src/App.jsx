@@ -22,15 +22,15 @@ import { blurOnUI } from './utils/ui';
 
 export default function App() {
   const [user, setUser] = useState(null);
-  const [userData, setUserData] = useState(null); 
+  const [userData, setUserData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('timer'); 
-  const [activeMode, setActiveMode] = useState('normal'); 
+  const [activeTab, setActiveTab] = useState('timer');
+  const [activeMode, setActiveMode] = useState('normal');
   const [error, setError] = useState(null);
-  
+
   const [isEditingName, setIsEditingName] = useState(false);
   const [tempName, setTempName] = useState("");
-  const [nameError, setNameError] = useState(null); 
+  const [nameError, setNameError] = useState(null);
   const [dailyCompleted, setDailyCompleted] = useState(false);
   const [recentSolves, setRecentSolves] = useState([]);
   const [showEmailAuth, setShowEmailAuth] = useState(false);
@@ -325,8 +325,11 @@ export default function App() {
           )}
 
           {user ? (
-            <div className="relative group z-50 inline-block">
-              <button className="flex items-center gap-3 bg-slate-900 border border-white/10 px-3 py-1 rounded-full hover:bg-slate-800 transition-colors">
+            <div className="relative z-50 inline-block">
+              <button 
+                onClick={() => setShowUserMenu(!showUserMenu)}
+                className="flex items-center gap-3 bg-slate-900 border border-white/10 px-3 py-1 rounded-full hover:bg-slate-800 transition-colors"
+              >
                 <div className="text-right hidden sm:block">
                   <span className="block text-xs font-bold text-slate-200">{user.isAnonymous ? "Guest" : isAdmin() ? "Admin" : "Member"}</span>
                   <span className="block text-[10px] text-slate-500 font-mono">{userData?.displayName?.slice(0, 10) || "Cuber"}</span>
@@ -335,21 +338,42 @@ export default function App() {
                   {userData?.displayName?.[0]?.toUpperCase() || "G"}
                 </div>
               </button>
-              <div className="absolute right-0 top-full mt-2 w-48 bg-slate-900 border border-white/10 rounded-xl shadow-xl opacity-0 invisible transform -translate-y-2 scale-95 group-hover:opacity-100 group-hover:visible group-hover:translate-y-0 group-hover:scale-100 transition-all duration-200 ease-out origin-top-right overflow-hidden z-50">
-                <div className="p-1">
-                  {user.isAnonymous && (
-                    <>
-                      <button onMouseUp={blurOnUI} onClick={() => setShowEmailAuth(true)} className="w-full flex items-center gap-2 px-4 py-3 text-sm text-blue-400 hover:bg-blue-500/10 hover:text-blue-300 rounded-lg transition-colors font-medium">
-                        <LogIn className="w-4 h-4" />
-                        <span>Convert with Email</span>
-                      </button>
-                      <button onMouseUp={blurOnUI} onClick={handleGoogleLogin} className="w-full flex items-center gap-2 px-4 py-3 text-sm text-blue-400 hover:bg-blue-500/10 hover:text-blue-300 rounded-lg transition-colors font-medium">
-                        <LogIn className="w-4 h-4" />
-                        <span>Convert with Google</span>
-                      </button>
-                      <div className="h-px bg-white/10 my-1"></div>
-                    </>
-                  )}
+              
+              {/* Dropdown Menu */}
+              {showUserMenu && (
+                <>
+                  {/* Backdrop to close on click outside */}
+                  <div className="fixed inset-0 z-40" onClick={() => setShowUserMenu(false)}></div>
+                  
+                  <div className="absolute right-0 top-full mt-2 w-48 bg-slate-900 border border-white/10 rounded-xl shadow-xl transform transition-all duration-200 ease-out origin-top-right overflow-hidden z-50 animate-in fade-in zoom-in-95">
+                    <div className="p-1">
+                      {user.isAnonymous && (
+                        <>
+                          <button 
+                            onMouseUp={blurOnUI} 
+                            onClick={() => {
+                              setShowUserMenu(false);
+                              setShowEmailAuth(true);
+                            }} 
+                            className="w-full flex items-center gap-2 px-4 py-3 text-sm text-blue-400 hover:bg-blue-500/10 hover:text-blue-300 rounded-lg transition-colors font-medium"
+                          >
+                            <LogIn className="w-4 h-4" />
+                            <span>Convert with Email</span>
+                          </button>
+                          <button 
+                            onMouseUp={blurOnUI} 
+                            onClick={() => {
+                              setShowUserMenu(false);
+                              handleGoogleLogin();
+                            }} 
+                            className="w-full flex items-center gap-2 px-4 py-3 text-sm text-blue-400 hover:bg-blue-500/10 hover:text-blue-300 rounded-lg transition-colors font-medium"
+                          >
+                            <LogIn className="w-4 h-4" />
+                            <span>Convert with Google</span>
+                          </button>
+                          <div className="h-px bg-white/10 my-1"></div>
+                        </>
+                      )}
                   {isAdmin() && (
                     <>
                       <button onMouseUp={blurOnUI} onClick={() => setShowAdminDashboard(true)} className="w-full flex items-center gap-2 px-4 py-3 text-sm text-purple-400 hover:bg-purple-500/10 hover:text-purple-300 rounded-lg transition-colors font-medium">
@@ -369,6 +393,8 @@ export default function App() {
                   </button>
                 </div>
               </div>
+                </>
+              )}
             </div>
           ) : (
             <div className="flex items-center gap-2">
