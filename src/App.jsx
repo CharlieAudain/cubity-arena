@@ -134,6 +134,17 @@ export default function App() {
     }
   };
 
+  // Check if current user is admin
+  const isAdmin = () => {
+    if (!user || user.isAnonymous) return false;
+    
+    // Check environment variable for admin emails
+    const adminEmails = import.meta.env.VITE_ADMIN_EMAILS?.split(',').map(e => e.trim()) || [];
+    
+    // Check if user email is in admin list
+    return adminEmails.includes(user.email);
+  };
+
   const handleLogout = async () => {
     await signOut(auth);
     setUserData(null);
@@ -234,21 +245,21 @@ export default function App() {
           </nav>
         </div>
 
-        <div>
+        <div className="flex items-center gap-3">
           {/* SMART CUBE CONNECT BUTTON */}
           <button 
             onClick={smartCube.isConnected ? smartCube.disconnectCube : () => smartCube.connectCube(userData?.macAddress)} 
-            className={`mr-4 px-4 py-2 rounded-lg text-xs font-bold uppercase transition-colors flex items-center gap-2 ${smartCube.isConnected ? 'bg-green-500/20 text-green-400 border border-green-500/30' : 'bg-slate-800 text-slate-400 hover:text-white'}`}
+            className={`px-4 py-2 rounded-lg text-xs font-bold uppercase transition-colors flex items-center gap-2 ${smartCube.isConnected ? 'bg-green-500/20 text-green-400 border border-green-500/30' : 'bg-slate-800 text-slate-400 hover:text-white'}`}
           >
             <Bluetooth className="w-4 h-4" /> {smartCube.isConnected ? 'Connected' : 'Connect Cube'}
           </button>
           
-          {/* MOCK CONNECT (Dev Only) */}
-          {!smartCube.isConnected && (
+          {/* MOCK CONNECT (Admin Only) */}
+          {!smartCube.isConnected && isAdmin() && (
               <button 
                   onClick={smartCube.connectMockCube}
-                  className="mr-4 px-2 py-1 rounded text-[10px] font-bold uppercase text-slate-600 hover:text-white hover:bg-white/10 transition-colors"
-                  title="Connect Mock Cube"
+                  className="px-2 py-1 rounded text-[10px] font-bold uppercase text-slate-600 hover:text-white hover:bg-white/10 transition-colors"
+                  title="Connect Mock Cube (Admin Only)"
               >
                   Mock
               </button>
@@ -258,10 +269,10 @@ export default function App() {
             <div className="relative group z-50 inline-block">
               <button className="flex items-center gap-3 bg-slate-900 border border-white/10 px-3 py-1 rounded-full hover:bg-slate-800 transition-colors">
                 <div className="text-right hidden sm:block">
-                  <span className="block text-xs font-bold text-slate-200">{user.isAnonymous ? "Guest" : "Member"}</span>
+                  <span className="block text-xs font-bold text-slate-200">{user.isAnonymous ? "Guest" : isAdmin() ? "Admin" : "Member"}</span>
                   <span className="block text-[10px] text-slate-500 font-mono">{userData?.displayName?.slice(0, 10) || "Cuber"}</span>
                 </div>
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold ${user.isAnonymous ? 'bg-slate-700' : 'bg-blue-600'}`}>
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold ${user.isAnonymous ? 'bg-slate-700' : isAdmin() ? 'bg-purple-600' : 'bg-blue-600'}`}>
                   {userData?.displayName?.[0]?.toUpperCase() || "G"}
                 </div>
               </button>
@@ -277,6 +288,14 @@ export default function App() {
                         <LogIn className="w-4 h-4" />
                         <span>Convert with Google</span>
                       </button>
+                      <div className="h-px bg-white/10 my-1"></div>
+                    </>
+                  )}
+                  {isAdmin() && (
+                    <>
+                      <div className="px-4 py-2 text-xs font-bold text-purple-400 uppercase tracking-wider">
+                        Admin Tools
+                      </div>
                       <div className="h-px bg-white/10 my-1"></div>
                     </>
                   )}
