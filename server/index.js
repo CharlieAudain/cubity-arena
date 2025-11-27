@@ -81,6 +81,9 @@ let queue3x3 = [];
 // Map socketId -> roomId
 const socketRooms = {};
 
+// Active Rooms (Source of Truth for Admin)
+const activeRooms = {}; // { roomId: { id, type, player1, player2, startTime } }
+
 // Rate Limiting
 const rateLimits = {}; // { socketId: { count: 0, lastReset: Date.now() } }
 const RATE_LIMIT = 50; // Max messages per second
@@ -107,6 +110,41 @@ const checkRateLimit = (socket) => {
     }
     return true;
 };
+
+// API Endpoints for Admin
+app.get('/api/rooms', (req, res) => {
+    res.json(Object.values(activeRooms));
+});
+
+app.delete('/api/rooms/:roomId', (req, res) => {
+    const { roomId } = req.params;
+    const room = activeRooms[roomId];
+    
+    if (room) {
+        console.log(`Admin force-closing room ${roomId}`);
+        
+        // Disconnect players
+        const p1Socket = io.sockets.sockets.get(room.player1.socketId);
+        const p2Socket = io.sockets.sockets.get(room.player2.socketId);
+        
+        if (p1Socket) {
+            p1Socket.emit('room_closed_by_admin');
+            p1Socket.leave(roomId);
+            delete socketRooms[p1Socket.id];
+        }
+        
+        if (p2Socket) {
+            p2Socket.emit('room_closed_by_admin');
+            p2Socket.leave(roomId);
+            delete socketRooms[p2Socket.id];
+        }
+        
+        delete activeRooms[roomId];
+        res.json({ success: true, message: `Room ${roomId} closed` });
+    } else {
+        res.status(404).json({ error: 'Room not found' });
+    }
+});
 
 io.on('connection', (socket) => {
     console.log(`User Connected: ${socket.id}`);
@@ -137,6 +175,23 @@ io.on('connection', (socket) => {
             // Track Rooms
             socketRooms[p1.socket.id] = roomId;
             socketRooms[p2.socket.id] = roomId;
+
+            // Add to Active Rooms
+            activeRooms[roomId] = {
+                id: roomId,
+                type: '3x3',
+                player1: { 
+                    id: p1.user.uid, 
+                    name: p1.user.displayName, 
+                    socketId: p1.socket.id 
+                },
+                player2: { 
+                    id: p2.user.uid, 
+                    name: p2.user.displayName, 
+                    socketId: p2.socket.id 
+                },
+                startTime: Date.now()
+            };
 
             console.log(`Match Found! Room: ${roomId} | ${p1.user.displayName} vs ${p2.user.displayName}`);
 
@@ -175,6 +230,12 @@ io.on('connection', (socket) => {
         socket.to(roomId).emit('opponent_left');
         socket.leave(roomId);
         delete socketRooms[socket.id];
+        
+        // Remove from active rooms if empty or just mark as partial?
+        // For now, if anyone leaves, we consider the match over/room invalid for monitoring
+        if (activeRooms[roomId]) {
+            delete activeRooms[roomId];
+        }
     });
 
     // LEAVE / DISCONNECT
@@ -187,6 +248,11 @@ io.on('connection', (socket) => {
             console.log(`User ${socket.id} disconnected from room ${roomId}`);
             socket.to(roomId).emit('opponent_left');
             delete socketRooms[socket.id];
+            
+            // Remove from active rooms
+            if (activeRooms[roomId]) {
+                delete activeRooms[roomId];
+            }
         }
         delete rateLimits[socket.id];
     });
