@@ -55,180 +55,61 @@ export const getDailySeed = () => {
   return parseInt(`${now.getFullYear()}${now.getMonth() + 1}${now.getDate()}`);
 };
 
-// --- UTILS: CUBE ENGINE ---
-export const getInitialState = (type) => {
-  const size = type === '2x2' ? 2 : type === '4x4' ? 4 : 3;
-  return getSolvedState(size);
+import { puzzles } from "cubing/puzzles";
+
+// --- UTILS: CUBE ENGINE (Refactored to use cubing.js) ---
+
+export const getInitialState = async (type) => {
+  // Return the default pattern for the puzzle type
+  const puzzleId = type === '2x2' ? '2x2x2' : type === '4x4' ? '4x4x4' : '3x3x3';
+  const puzzle = puzzles[puzzleId];
+  const kp = await puzzle.kpuzzle();
+  return kp.defaultPattern();
 };
 
-export const getSolvedState = (size) => {
-  const stickersPerFace = size * size;
-  const colors = ['#ffffff', '#ef4444', '#22c55e', '#eab308', '#f97316', '#3b82f6'];
-  return colors.map(c => Array(stickersPerFace).fill(c));
+export const getSolvedState = async (size) => {
+  // Helper to get solved state based on size (mapped to type)
+  const type = size === 2 ? '2x2' : size === 4 ? '4x4' : '3x3';
+  return getInitialState(type);
 };
 
 export const isStateSolved = (state) => {
-  return state.every(face => {
-    const firstColor = face[0];
-    return face.every(sticker => sticker === firstColor);
-  });
-};
-
-const rotateFace = (face, size) => {
-  const newFace = [...face];
-  for (let i = 0; i < size; i++) {
-    for (let j = 0; j < size; j++) {
-      newFace[j * size + (size - 1 - i)] = face[i * size + j];
+  if (!state) return false;
+  
+  try {
+    const puzzle = state.kpuzzle;
+    
+    // Use the puzzle's built-in solved check if available
+    if (puzzle.definition?.experimentalIsPatternSolved && state.patternData) {
+      try {
+        return puzzle.definition.experimentalIsPatternSolved(state.patternData, {
+          ignorePuzzleOrientation: true
+        });
+      } catch (expError) {
+        // Fall through to isIdentical
+      }
     }
+    
+    // Fallback to isIdentical
+    const defaultPattern = puzzle.defaultPattern();
+    return state.isIdentical(defaultPattern);
+  } catch (e) {
+    console.error("[isStateSolved] Error:", e);
+    return false;
   }
-  return newFace;
-};
-
-const rotateFaceCounter = (face, size) => {
-  let f = face;
-  f = rotateFace(f, size);
-  f = rotateFace(f, size);
-  f = rotateFace(f, size);
-  return f;
 };
 
 export const applyCubeMove = (state, move, type) => {
-  const size = type === '2x2' ? 2 : type === '4x4' ? 4 : 3;
-  let newState = state.map(f => [...f]); 
-  
-  const base = move.replace(/['2w]/g, '');
-  const isPrime = move.includes("'");
-  const isDouble = move.includes("2");
-  
-  const getRow = (faceIdx, rowIdx) => {
-    const start = rowIdx * size;
-    return newState[faceIdx].slice(start, start + size);
-  };
-  const setRow = (faceIdx, rowIdx, data) => {
-    const start = rowIdx * size;
-    for(let i=0; i<size; i++) newState[faceIdx][start+i] = data[i];
-  };
-  
-  const getCol = (faceIdx, colIdx) => {
-    let col = [];
-    for(let i=0; i<size; i++) col.push(newState[faceIdx][i * size + colIdx]);
-    return col;
-  };
-  const setCol = (faceIdx, colIdx, data) => {
-    for(let i=0; i<size; i++) newState[faceIdx][i * size + colIdx] = data[i];
-  };
-
-  const cycle = (arrs, rev = false) => {
-    if (rev) {
-      const temp = arrs[3];
-      arrs[3] = arrs[2];
-      arrs[2] = arrs[1];
-      arrs[1] = arrs[0];
-      arrs[0] = temp;
-    } else {
-      const temp = arrs[0];
-      arrs[0] = arrs[1];
-      arrs[1] = arrs[2];
-      arrs[2] = arrs[3];
-      arrs[3] = temp;
-    }
-    return arrs;
-  };
-
-  const turns = isDouble ? 2 : 1;
-
-  for (let t = 0; t < turns; t++) {
-    if (base === 'U') {
-      newState[0] = isPrime ? rotateFaceCounter(newState[0], size) : rotateFace(newState[0], size);
-      let sides = [getRow(2,0), getRow(4,0), getRow(5,0), getRow(1,0)]; 
-      sides = cycle(sides, !isPrime);
-      setRow(2,0, sides[0]); setRow(4,0, sides[1]); setRow(5,0, sides[2]); setRow(1,0, sides[3]);
-    }
-    else if (base === 'D') {
-      newState[3] = isPrime ? rotateFaceCounter(newState[3], size) : rotateFace(newState[3], size);
-      let sides = [getRow(2, size-1), getRow(1, size-1), getRow(5, size-1), getRow(4, size-1)];
-      sides = cycle(sides, !isPrime);
-      setRow(2, size-1, sides[0]); setRow(1, size-1, sides[1]); setRow(5, size-1, sides[2]); setRow(4, size-1, sides[3]);
-    }
-    else if (base === 'F') {
-      newState[2] = isPrime ? rotateFaceCounter(newState[2], size) : rotateFace(newState[2], size);
-      let uRow = getRow(0, size-1);
-      let rCol = getCol(1, 0);
-      let dRow = getRow(3, 0);
-      let lCol = getCol(4, size-1);
-      
-      if (!isPrime) {
-        setCol(1, 0, uRow);
-        setRow(3, 0, rCol.reverse());
-        setCol(4, size-1, dRow);
-        setRow(0, size-1, lCol.reverse());
-      } else {
-        setCol(4, size-1, uRow.reverse());
-        setRow(3, 0, lCol);
-        setCol(1, 0, dRow.reverse());
-        setRow(0, size-1, rCol);
-      }
-    }
-    else if (base === 'B') {
-      newState[5] = isPrime ? rotateFaceCounter(newState[5], size) : rotateFace(newState[5], size);
-      let uRow = getRow(0, 0);
-      let lCol = getCol(4, 0);
-      let dRow = getRow(3, size-1);
-      let rCol = getCol(1, size-1);
-
-      if (!isPrime) {
-        setCol(4, 0, uRow.reverse());
-        setRow(3, size-1, lCol);
-        setCol(1, size-1, dRow.reverse());
-        setRow(0, 0, rCol);
-      } else {
-        setCol(1, size-1, uRow);
-        setRow(3, size-1, rCol.reverse());
-        setCol(4, 0, dRow);
-        setRow(0, 0, lCol.reverse());
-      }
-    }
-    else if (base === 'R') {
-      newState[1] = isPrime ? rotateFaceCounter(newState[1], size) : rotateFace(newState[1], size);
-      let uCol = getCol(0, size-1);
-      let bCol = getCol(5, 0); 
-      let dCol = getCol(3, size-1);
-      let fCol = getCol(2, size-1);
-
-      if (!isPrime) {
-        setCol(5, 0, uCol.reverse());
-        setCol(3, size-1, bCol.reverse());
-        setCol(2, size-1, dCol);
-        setCol(0, size-1, fCol);
-      } else {
-        setCol(2, size-1, uCol);
-        setCol(3, size-1, fCol);
-        setCol(5, 0, dCol.reverse());
-        setCol(0, size-1, bCol.reverse());
-      }
-    }
-    else if (base === 'L') {
-      newState[4] = isPrime ? rotateFaceCounter(newState[4], size) : rotateFace(newState[4], size);
-      let uCol = getCol(0, 0);
-      let fCol = getCol(2, 0);
-      let dCol = getCol(3, 0);
-      let bCol = getCol(5, size-1);
-
-      if (!isPrime) {
-        setCol(2, 0, uCol);
-        setCol(3, 0, fCol);
-        setCol(5, size-1, dCol.reverse());
-        setCol(0, 0, bCol.reverse());
-      } else {
-        setCol(5, size-1, uCol.reverse());
-        setCol(3, 0, bCol.reverse());
-        setCol(2, 0, dCol);
-        setCol(0, 0, fCol);
-      }
-    }
+  if (!state) return null;
+  // Apply move to the KPattern
+  try {
+      // cubing.js expects moves like "R", "R'", "R2"
+      // Our move input is already in standard notation.
+      return state.applyAlg(move);
+  } catch (e) {
+      console.error("Invalid move applied:", move, e);
+      return state;
   }
-  
-  return newState;
 };
 
 export const getInverseMove = (move) => {

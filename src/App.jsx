@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  Users, Zap, Settings, Timer, LogIn, Activity, Bluetooth, Flame, LogOut, Swords, AlertCircle, TrendingUp, Trophy, Shield, User, Lock 
+  Users, Zap, Settings, Timer, LogIn, Activity, Bluetooth, Flame, LogOut, Swords, AlertCircle, TrendingUp, Trophy, Shield, User, Lock, X 
 } from 'lucide-react';
 import { 
-  onAuthStateChanged, signInAnonymously, signOut, GoogleAuthProvider, signInWithPopup, linkWithPopup 
+  onAuthStateChanged, signInAnonymously, signOut, GoogleAuthProvider, signInWithPopup, linkWithPopup, sendPasswordResetEmail
 } from 'firebase/auth'; 
 import { 
   doc, getDoc, setDoc, updateDoc, deleteDoc, collection, addDoc, query, orderBy, limit, onSnapshot 
@@ -109,8 +109,33 @@ export default function App() {
               setTempName(data.displayName);
           } else {
             // New user or no profile
+            let uniqueGuestName = 'Guest Cuber';
+            
+            // Generate unique Guest Name (Guest123456)
+            try {
+                let isUnique = false;
+                let attempts = 0;
+                while (!isUnique && attempts < 10) {
+                    const num = Math.floor(100000 + Math.random() * 900000); // 6 digit number
+                    const name = `Guest${num}`;
+                    const id = name.toLowerCase();
+                    const ref = doc(db, 'artifacts', 'cubity-v1', 'public', 'data', 'usernames', id);
+                    const snap = await getDoc(ref);
+                    
+                    if (!snap.exists()) {
+                        uniqueGuestName = name;
+                        isUnique = true;
+                        // Reserve the username
+                        await setDoc(ref, { uid: currentUser.uid });
+                    }
+                    attempts++;
+                }
+            } catch (e) {
+                console.error("Error generating unique guest name:", e);
+            }
+
             const newProfile = {
-              displayName: currentUser.displayName || 'Guest Cuber',
+              displayName: currentUser.displayName || uniqueGuestName,
               rank: 'Beginner',
               elo: 800,
               streak: 0,
@@ -346,6 +371,8 @@ export default function App() {
           </nav>
         </div>
 
+
+
         <div className="flex items-center gap-3">
           {/* SMART CUBE CONNECT BUTTON */}
           <button 
@@ -389,33 +416,7 @@ export default function App() {
                   
                   <div className="absolute right-0 top-full mt-2 w-48 bg-slate-900 border border-white/10 rounded-xl shadow-xl transform transition-all duration-200 ease-out origin-top-right overflow-hidden z-50 animate-in fade-in zoom-in-95">
                     <div className="p-1">
-                      {user.isAnonymous && (
-                        <>
-                          <button 
-                            onMouseUp={blurOnUI} 
-                            onClick={() => {
-                              setShowUserMenu(false);
-                              setShowEmailAuth(true);
-                            }} 
-                            className="w-full flex items-center gap-2 px-4 py-3 text-sm text-blue-400 hover:bg-blue-500/10 hover:text-blue-300 rounded-lg transition-colors font-medium"
-                          >
-                            <LogIn className="w-4 h-4" />
-                            <span>Convert with Email</span>
-                          </button>
-                          <button 
-                            onMouseUp={blurOnUI} 
-                            onClick={() => {
-                              setShowUserMenu(false);
-                              handleGoogleLogin();
-                            }} 
-                            className="w-full flex items-center gap-2 px-4 py-3 text-sm text-blue-400 hover:bg-blue-500/10 hover:text-blue-300 rounded-lg transition-colors font-medium"
-                          >
-                            <LogIn className="w-4 h-4" />
-                            <span>Convert with Google</span>
-                          </button>
-                          <div className="h-px bg-white/10 my-1"></div>
-                        </>
-                      )}
+
                   {isAdmin() && (
                     <>
                       <button onMouseUp={blurOnUI} onClick={() => setShowAdminDashboard(true)} className="w-full flex items-center gap-2 px-4 py-3 text-sm text-purple-400 hover:bg-purple-500/10 hover:text-purple-300 rounded-lg transition-colors font-medium">
@@ -666,26 +667,38 @@ export default function App() {
                             </div>
                         </div>
                     ) : (
-                        <button
-                            onClick={() => {
-                                // Check cooldown (30 days = 30 * 24 * 60 * 60 * 1000 ms)
-                                const lastChange = userData?.lastUsernameChange;
-                                const thirtyDaysAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
-                                
-                                if (!isAdmin() && lastChange && new Date(lastChange).getTime() > thirtyDaysAgo) {
-                                    const daysLeft = Math.ceil((new Date(lastChange).getTime() - thirtyDaysAgo) / (24 * 60 * 60 * 1000));
-                                    setNameError(`You can change your username again in ${daysLeft} days`);
-                                    return;
-                                }
-                                
-                                setTempName(userData?.displayName || '');
-                                setIsEditingName(true);
-                                setNameError(null);
-                            }}
-                            className="w-full bg-slate-800 hover:bg-slate-700 text-white px-4 py-3 rounded-lg font-bold transition-colors flex items-center justify-center gap-2"
-                        >
-                            <User className="w-4 h-4" /> Change Username
-                        </button>
+                        user.isAnonymous ? (
+                            <div className="text-center p-4 bg-slate-800/50 rounded-lg border border-white/5">
+                                <p className="text-sm text-slate-400 mb-3">Create an account to customize your username.</p>
+                                <button 
+                                    onClick={() => setActiveTab('more')} // Just scroll to account security or highlight it? For now just text is fine.
+                                    className="text-blue-400 text-sm font-bold hover:text-blue-300"
+                                >
+                                    Sign Up / Log In below
+                                </button>
+                            </div>
+                        ) : (
+                            <button
+                                onClick={() => {
+                                    // Check cooldown (30 days = 30 * 24 * 60 * 60 * 1000 ms)
+                                    const lastChange = userData?.lastUsernameChange;
+                                    const thirtyDaysAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
+                                    
+                                    if (!isAdmin() && lastChange && new Date(lastChange).getTime() > thirtyDaysAgo) {
+                                        const daysLeft = Math.ceil((new Date(lastChange).getTime() - thirtyDaysAgo) / (24 * 60 * 60 * 1000));
+                                        setNameError(`You can change your username again in ${daysLeft} days`);
+                                        return;
+                                    }
+                                    
+                                    setTempName(userData?.displayName || '');
+                                    setIsEditingName(true);
+                                    setNameError(null);
+                                }}
+                                className="w-full bg-slate-800 hover:bg-slate-700 text-white px-4 py-3 rounded-lg font-bold transition-colors flex items-center justify-center gap-2"
+                            >
+                                <User className="w-4 h-4" /> Change Username
+                            </button>
+                        )
                     )}
                     
                     {!isAdmin() && userData?.lastUsernameChange && (
@@ -695,24 +708,69 @@ export default function App() {
                     )}
                 </div>
 
-                {/* Account Security (Password Linking) */}
-                {(() => {
-                    console.log('User Provider Data:', user?.providerData);
-                    return user && !user.providerData.some(p => p.providerId === 'password');
-                })() && (
+                {/* Account Security (Password Linking & Reset) */}
+                {user && (
                     <div className="bg-slate-900 border border-white/10 rounded-xl p-6 mb-6">
                         <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
                             <Shield className="w-5 h-5 text-blue-400" /> Account Security
                         </h3>
-                        <p className="text-sm text-slate-400 mb-4">
-                            You are currently signed in with Google. Set a password to log in with your email address as well.
-                        </p>
-                        <button 
-                            onClick={() => setShowEmailAuth(true)}
-                            className="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-lg font-bold transition-colors flex items-center justify-center gap-2"
-                        >
-                            <Lock className="w-4 h-4" /> Set Password
-                        </button>
+
+                        {/* Guest Conversion */}
+                        {user.isAnonymous && (
+                            <div className="mb-6 pb-6 border-b border-white/10">
+                                <p className="text-sm text-slate-400 mb-4">
+                                    You are currently using a guest account. Link an email or Google account to save your progress permanently.
+                                </p>
+                                <div className="flex flex-col gap-3">
+                                    <button 
+                                        onClick={() => setShowEmailAuth(true)}
+                                        className="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-lg font-bold transition-colors flex items-center justify-center gap-2"
+                                    >
+                                        <LogIn className="w-4 h-4" /> Convert with Email
+                                    </button>
+                                    <button 
+                                        onClick={handleGoogleLogin}
+                                        className="w-full bg-white hover:bg-slate-200 text-slate-900 px-4 py-3 rounded-lg font-bold transition-colors flex items-center justify-center gap-2"
+                                    >
+                                        <LogIn className="w-4 h-4" /> Convert with Google
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                        
+                        {/* Link Password (if Google only) */}
+                        {!user.providerData.some(p => p.providerId === 'password') && (
+                            <div className="mb-6">
+                                <p className="text-sm text-slate-400 mb-4">
+                                    You are currently signed in with Google. Set a password to log in with your email address as well.
+                                </p>
+                                <button 
+                                    onClick={() => setShowEmailAuth(true)}
+                                    className="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-lg font-bold transition-colors flex items-center justify-center gap-2"
+                                >
+                                    <Lock className="w-4 h-4" /> Set Password
+                                </button>
+                            </div>
+                        )}
+
+                        {/* Reset Password */}
+                        <div>
+                            <p className="text-sm text-slate-400 mb-4">
+                                Need to change your password? We'll send a reset link to <strong>{user.email}</strong>.
+                            </p>
+                            <button 
+                                onClick={() => {
+                                    if (confirm(`Send password reset email to ${user.email}?`)) {
+                                        sendPasswordResetEmail(auth, user.email)
+                                            .then(() => alert("Password reset email sent! Check your inbox."))
+                                            .catch((error) => alert("Error sending email: " + error.message));
+                                    }
+                                }}
+                                className="w-full bg-slate-800 hover:bg-slate-700 text-white px-4 py-3 rounded-lg font-bold transition-colors flex items-center justify-center gap-2"
+                            >
+                                <Lock className="w-4 h-4" /> Reset Password
+                            </button>
+                        </div>
                     </div>
                 )}
 

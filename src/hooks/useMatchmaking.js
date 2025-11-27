@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useSocket } from './useSocket';
+import { auth } from '../lib/firebase';
+import { signOut } from 'firebase/auth';
 
 export const useMatchmaking = (user) => {
     const [status, setStatus] = useState('idle'); // idle, searching, found
@@ -29,8 +31,23 @@ export const useMatchmaking = (user) => {
             });
         });
 
+        // Listen for Errors (e.g. Banned)
+        socket.on('error', (data) => {
+            console.error("Socket Error:", data);
+            setError(data.message);
+            setStatus('idle');
+
+            // Force Logout if Banned
+            if (data.message && data.message.toLowerCase().includes('banned')) {
+                signOut(auth).then(() => {
+                    window.location.reload(); // Force reload to clear state
+                });
+            }
+        });
+
         return () => {
             socket.off('match_found');
+            socket.off('error');
         };
     }, [socket, user]);
 

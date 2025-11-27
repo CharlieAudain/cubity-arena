@@ -8,6 +8,7 @@ export const useSmartCube = () => {
   const [deviceName, setDeviceName] = useState(null);
   const [deviceMAC, setDeviceMAC] = useState(null);
   const [lastMove, setLastMove] = useState(null);
+  const [moveHistory, setMoveHistory] = useState([]); // Rolling buffer of last 50 moves
   const [facelets, setFacelets] = useState(null);
   const [error, setError] = useState(null);
   const [isMacRequired, setIsMacRequired] = useState(false); // New state
@@ -23,7 +24,10 @@ export const useSmartCube = () => {
 
       subRef.current = conn.events$.subscribe((event) => {
         if (event.type === 'MOVE') {
-          setLastMove({ move: event.move, time: Date.now() });
+          console.log("[useSmartCube] Received move:", event.move);
+          const newMove = { move: event.move, time: Date.now(), id: Date.now() + Math.random() };
+          setLastMove(newMove);
+          setMoveHistory(prev => [...prev.slice(-49), newMove]);
         }
         if (event.type === 'FACELETS') {
             setFacelets(event.facelets);
@@ -66,6 +70,9 @@ export const useSmartCube = () => {
       // but retryWithMac will handle success/fail.
       // If we didn't retry, we are indeed disconnected/failed.
       if (!savedMac) setIsConnected(false);
+      
+      // Auto-clear error after 20 seconds
+      setTimeout(() => setError(null), 20000);
     }
   };
 
@@ -80,12 +87,18 @@ export const useSmartCube = () => {
               throw new Error(`Invalid MAC length: ${cleanMac.length} chars (expected 12 hex chars)`);
           }
 
-          // connectGanCube expects a provider function
-          const conn = await connectGanCube(async () => cleanMac);
+          // connectGanCube expects the MAC address as a string with colons (AA:BB:CC:11:22:33)
+          // It uses .split(':') internally to derive the 6-byte salt.
+          const formattedMac = cleanMac.match(/.{1,2}/g).join(':');
+          console.log("Retrying with formatted MAC:", formattedMac);
+
+          const conn = await connectGanCube(async () => formattedMac);
           setupConnection(conn);
       } catch (err) {
           console.error("Retry Error:", err);
           setError("Failed to connect with MAC: " + err.message);
+          // Auto-clear error after 20 seconds
+          setTimeout(() => setError(null), 20000);
       }
   };
 
@@ -110,7 +123,9 @@ export const useSmartCube = () => {
       const moves = ["R", "R'", "L", "L'", "U", "U'", "D", "D'", "F", "F'", "B", "B'"];
       const interval = setInterval(() => {
           const randomMove = moves[Math.floor(Math.random() * moves.length)];
-          setLastMove({ move: randomMove, time: Date.now() });
+          const newMove = { move: randomMove, time: Date.now(), id: Date.now() + Math.random() };
+          setLastMove(newMove);
+          setMoveHistory(prev => [...prev.slice(-49), newMove]);
       }, 1500);
 
       // Store interval to clear on disconnect
@@ -120,5 +135,5 @@ export const useSmartCube = () => {
       };
   };
 
-  return { isConnected, deviceName, deviceMAC, connectCube, disconnectCube, connectMockCube, lastMove, facelets, error, isMacRequired, retryWithMac };
+  return { isConnected, deviceName, deviceMAC, connectCube, disconnectCube, connectMockCube, lastMove, moveHistory, facelets, error, isMacRequired, retryWithMac };
 };

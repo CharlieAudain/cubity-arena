@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Shield, Users, Swords, X, RefreshCw, Trash2, ArrowRight, Ban, UserX } from 'lucide-react';
+import { Shield, Users, Swords, X, RefreshCw, Trash2, ArrowRight, Ban, UserX, Play } from 'lucide-react';
 import { collection, getDocs, doc, deleteDoc, updateDoc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 
@@ -72,7 +72,213 @@ const AdminDashboard = ({ user, onClose }) => {
         }
     };
 
-    // ... (Transfer Username logic remains same) ...
+    // Start a test match
+    const startTestMatch = async () => {
+        setLoading(true);
+        setError('');
+        try {
+            const API_URL = import.meta.env.PROD ? 'https://cubity-arena-production.up.railway.app' : 'http://localhost:3001';
+            const res = await fetch(`${API_URL}/api/test-match`, { method: 'POST' });
+            if (!res.ok) throw new Error('Failed to start test match');
+            const data = await res.json();
+            setSuccess(`Test match started: ${data.roomId}`);
+            loadRooms(); // Reload rooms
+            setTimeout(() => setSuccess(''), 3000);
+        } catch (err) {
+            console.error('Error starting test match:', err);
+            setError('Failed to start test match: ' + err.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Transfer username
+    const transferUsername = async () => {
+        setTransferLoading(true);
+        setError('');
+        setSuccess('');
+
+        try {
+            const oldUsernameId = oldUsername.toLowerCase().trim();
+            const newUsernameId = newUsername.toLowerCase().trim();
+
+            if (!oldUsernameId || !newUsernameId) {
+                setError('Both usernames are required');
+                setTransferLoading(false);
+                return;
+            }
+
+            if (oldUsernameId === newUsernameId) {
+                setError('Old and new usernames cannot be the same');
+                setTransferLoading(false);
+                return;
+            }
+
+            // Check if old username exists
+            const oldUsernameRef = doc(db, 'artifacts', 'cubity-v1', 'public', 'data', 'usernames', oldUsernameId);
+            const oldUsernameSnap = await getDoc(oldUsernameRef);
+
+            if (!oldUsernameSnap.exists()) {
+                setError(`Username "${oldUsername}" does not exist`);
+                setTransferLoading(false);
+                return;
+            }
+
+            // Get the UID from old username (user who will receive the new username)
+            const recipientUid = oldUsernameSnap.data().uid;
+
+            // Check if new username is taken
+            const newUsernameRef = doc(db, 'artifacts', 'cubity-v1', 'public', 'data', 'usernames', newUsernameId);
+            const newUsernameSnap = await getDoc(newUsernameRef);
+
+            let displacedUid = null;
+            let displacedUsername = null;
+
+            if (newUsernameSnap.exists()) {
+                // New username is taken - need to displace that user
+                displacedUid = newUsernameSnap.data().uid;
+                
+                // Generate unique member# username
+                let memberNumber = Math.floor(Math.random() * 1000000);
+                let memberUsername = `member${memberNumber}`;
+                let memberUsernameId = memberUsername.toLowerCase();
+                
+                // Keep trying until we find an available member# username
+                let attempts = 0;
+                while (attempts < 100) {
+                    const memberRef = doc(db, 'artifacts', 'cubity-v1', 'public', 'data', 'usernames', memberUsernameId);
+                    const memberSnap = await getDoc(memberRef);
+                    
+                    if (!memberSnap.exists()) {
+                        // Found available member# username
+                        displacedUsername = memberUsername;
+                        break;
+                    }
+                    
+                    // Try next number
+                    memberNumber++;
+                    memberUsername = `member${memberNumber}`;
+                    memberUsernameId = memberUsername.toLowerCase();
+                    attempts++;
+                }
+                
+                if (!displacedUsername) {
+                    setError('Failed to generate unique member# username');
+                    setTransferLoading(false);
+                    return;
+                }
+                
+                // Create member# username for displaced user
+                const displacedUsernameRef = doc(db, 'artifacts', 'cubity-v1', 'public', 'data', 'usernames', memberUsernameId);
+                await setDoc(displacedUsernameRef, { uid: displacedUid });
+                
+                // Update displaced user's profile
+                const displacedProfileRef = doc(db, 'artifacts', 'cubity-v1', 'users', displacedUid, 'profile', 'main');
+                await setDoc(displacedProfileRef, {
+                    displayName: displacedUsername,
+                    lastUsernameChange: new Date().toISOString(),
+                    displacedBy: user.email,
+                    displacedAt: new Date().toISOString()
+                }, { merge: true });
+            }
+
+            // Transfer new username to recipient
+            await setDoc(newUsernameRef, { uid: recipientUid });
+
+            // Delete old username entry
+            await deleteDoc(oldUsernameRef);
+
+            // Update recipient's profile
+            const recipientProfileRef = doc(db, 'artifacts', 'cubity-v1', 'users', recipientUid, 'profile', 'main');
+            await setDoc(recipientProfileRef, {
+                displayName: newUsername,
+                lastUsernameChange: new Date().toISOString()
+            }, { merge: true });
+
+            if (displacedUsername) {
+                setSuccess(`✅ Username transferred from "${oldUsername}" to "${newUsername}". Previous owner of "${newUsername}" was reassigned to "${displacedUsername}"`);
+            } else {
+                setSuccess(`✅ Username transferred from "${oldUsername}" to "${newUsername}"`);
+            }
+            
+            setOldUsername('');
+            setNewUsername('');
+        } catch (err) {
+            console.error('Error transferring username:', err);
+            setError('Failed to transfer username: ' + err.message);
+        } finally {
+            setTransferLoading(false);
+        }
+    };
+
+    // Load banned users
+    const loadBannedUsers = async () => {
+        setLoading(true);
+        setError('');
+        try {
+            const bannedRef = collection(db, 'artifacts', 'cubity-v1', 'public', 'data', 'banned_users');
+            const snapshot = await getDocs(bannedRef);
+            const banned = snapshot.docs.map(doc => ({
+                username: doc.id,
+                ...doc.data()
+            }));
+            setBannedUsers(banned);
+        } catch (err) {
+            console.error('Error loading banned users:', err);
+            setError('Failed to load banned users: ' + err.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Ban a user
+    const banUser = async () => {
+        setBanLoading(true);
+        setError('');
+        setSuccess('');
+
+        try {
+            const usernameId = banUsername.toLowerCase().trim();
+
+            if (!usernameId) {
+                setError('Username is required');
+                setBanLoading(false);
+                return;
+            }
+
+            // Check if username exists
+            const usernameRef = doc(db, 'artifacts', 'cubity-v1', 'public', 'data', 'usernames', usernameId);
+            const usernameSnap = await getDoc(usernameRef);
+
+            if (!usernameSnap.exists()) {
+                setError(`Username "${banUsername}" does not exist`);
+                setBanLoading(false);
+                return;
+            }
+
+            const uid = usernameSnap.data().uid;
+
+            // Add to banned users collection
+            const bannedRef = doc(db, 'artifacts', 'cubity-v1', 'public', 'data', 'banned_users', usernameId);
+            await setDoc(bannedRef, {
+                uid: uid,
+                username: banUsername,
+                reason: banReason || 'No reason provided',
+                bannedAt: new Date().toISOString(),
+                bannedBy: user.email
+            });
+
+            setSuccess(`✅ User "${banUsername}" has been banned`);
+            setBanUsername('');
+            setBanReason('');
+            loadBannedUsers();
+        } catch (err) {
+            console.error('Error banning user:', err);
+            setError('Failed to ban user: ' + err.message);
+        } finally {
+            setBanLoading(false);
+        }
+    };
 
     // Unban a user
     const unbanUser = async (username) => {
@@ -95,7 +301,86 @@ const AdminDashboard = ({ user, onClose }) => {
         }
     };
 
-    // ... (Effect and Render) ...
+    useEffect(() => {
+        if (activeTab === 'rooms') {
+            loadRooms();
+        } else if (activeTab === 'bans') {
+            loadBannedUsers();
+        }
+    }, [activeTab]);
+
+    return (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+            <div className="bg-slate-900 border border-purple-500/20 rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+                {/* Header */}
+                <div className="flex items-center justify-between p-6 border-b border-white/10 bg-gradient-to-r from-purple-900/20 to-transparent">
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-purple-600 rounded-lg flex items-center justify-center">
+                            <Shield className="w-6 h-6 text-white" />
+                        </div>
+                        <div>
+                            <h2 className="text-2xl font-bold text-white">Admin Dashboard</h2>
+                            <p className="text-sm text-purple-400">Cubity Arena Management</p>
+                        </div>
+                    </div>
+                    <button 
+                        onClick={onClose}
+                        className="text-slate-400 hover:text-white text-2xl transition-colors"
+                    >
+                        <X className="w-6 h-6" />
+                    </button>
+                </div>
+
+                {/* Tabs */}
+                <div className="flex gap-2 p-4 border-b border-white/10 bg-slate-900/50">
+                    <button
+                        onClick={() => setActiveTab('rooms')}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
+                            activeTab === 'rooms' 
+                                ? 'bg-purple-600 text-white' 
+                                : 'bg-slate-800 text-slate-400 hover:text-white'
+                        }`}
+                    >
+                        <Swords className="w-4 h-4" />
+                        Room Monitor
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('username')}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
+                            activeTab === 'username' 
+                                ? 'bg-purple-600 text-white' 
+                                : 'bg-slate-800 text-slate-400 hover:text-white'
+                        }`}
+                    >
+                        <Users className="w-4 h-4" />
+                        Username Transfer
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('bans')}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
+                            activeTab === 'bans' 
+                                ? 'bg-purple-600 text-white' 
+                                : 'bg-slate-800 text-slate-400 hover:text-white'
+                        }`}
+                    >
+                        <Ban className="w-4 h-4" />
+                        Ban Users
+                    </button>
+                </div>
+
+                {/* Content */}
+                <div className="flex-1 overflow-y-auto p-6">
+                    {/* Error/Success Messages */}
+                    {error && (
+                        <div className="mb-4 p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400">
+                            {error}
+                        </div>
+                    )}
+                    {success && (
+                        <div className="mb-4 p-4 bg-green-500/10 border border-green-500/20 rounded-xl text-green-400">
+                            {success}
+                        </div>
+                    )}
 
                     {/* Room Monitor Tab */}
                     {activeTab === 'rooms' && (
@@ -109,6 +394,14 @@ const AdminDashboard = ({ user, onClose }) => {
                                 >
                                     <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
                                     Refresh
+                                </button>
+                                <button
+                                    onClick={startTestMatch}
+                                    disabled={loading}
+                                    className="flex items-center gap-2 px-3 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg transition-colors disabled:opacity-50"
+                                >
+                                    <Play className="w-4 h-4" />
+                                    Start Test Match
                                 </button>
                             </div>
 
@@ -167,6 +460,8 @@ const AdminDashboard = ({ user, onClose }) => {
                             )}
                         </div>
                     )}
+
+
 
                     {/* Username Transfer Tab */}
                     {activeTab === 'username' && (
@@ -351,10 +646,14 @@ const AdminDashboard = ({ user, onClose }) => {
                                                     </div>
                                                     <button
                                                         onClick={() => unbanUser(banned.username)}
-                                                        className="flex items-center gap-2 px-3 py-2 bg-green-500/20 hover:bg-green-500/30 text-green-400 rounded-lg transition-colors"
+                                                        className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all duration-200 ${
+                                                            confirmAction?.type === 'unban' && confirmAction?.id === banned.username
+                                                                ? 'bg-green-600 text-white animate-pulse'
+                                                                : 'bg-green-500/20 hover:bg-green-500/30 text-green-400'
+                                                        }`}
                                                     >
                                                         <RefreshCw className="w-4 h-4" />
-                                                        Unban
+                                                        {confirmAction?.type === 'unban' && confirmAction?.id === banned.username ? 'Confirm Unban' : 'Unban'}
                                                     </button>
                                                 </div>
                                             </div>

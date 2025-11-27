@@ -36,6 +36,7 @@ const TimerView = ({
   const [penalty, setPenalty] = useState(null); // null, '+2', 'DNF'
   const inspectionIntervalRef = useRef(null);
   const lastMoveAtInspectionStart = useRef(null); // Track move that started inspection
+  const lastProcessedMoveId = useRef(0); // Track processed moves to avoid missing any
 
   // Scramble Tracking
   const [scrambleIndex, setScrambleIndex] = useState(0);
@@ -61,46 +62,64 @@ const TimerView = ({
   useEffect(() => {
     if (smartCube && smartCube.isConnected) {
         setShowSyncPrompt(true); // Show one-time sync prompt
-        
-        // Force internal state to SOLVED on connection to ensure sync
-        setCurrentCubeState(getSolvedState(cubeType === '2x2' ? 2 : cubeType === '4x4' ? 4 : 3));
 
-        if (smartCube.lastMove && currentCubeState) {
-            // Update live state on move
-            const newState = applyCubeMove(currentCubeState, smartCube.lastMove.move, cubeType);
-            setCurrentCubeState(newState);
+        if (smartCube.moveHistory && smartCube.moveHistory.length > 0 && currentCubeState) {
+            // Process all new moves from history
+            const newMoves = smartCube.moveHistory.filter(m => m.id > lastProcessedMoveId.current);
             
-            // Notify Parent (BattleRoom)
-            if (onMove) onMove(smartCube.lastMove.move);
-
-            // Track Solution Moves
-            if (timerState === 'RUNNING') {
-                setSolutionMoves(prev => [...prev, smartCube.lastMove.move]);
-            }
-            
-            // Check for Solved State (Auto-Stop)
-            if (timerState === 'RUNNING') {
-                // Rely on internal state tracking (more reliable than raw facelets which can be affected by gyro drift)
-                const isSolved = isStateSolved(newState);
+            if (newMoves.length > 0) {
+                let newState = currentCubeState;
                 
-                if (isSolved) {
-                    stopTimer();
+                newMoves.forEach(moveData => {
+                    // Update live state
+                    const nextState = applyCubeMove(newState, moveData.move, cubeType);
+                    if (nextState) {
+                        newState = nextState;
+                    } else {
+                        console.error("Failed to apply move:", moveData.move);
+                    }
+                    
+                    // Notify Parent (BattleRoom)
+                    if (onMove) onMove(moveData.move);
+
+                    // Track Solution Moves
+                    if (timerState === 'RUNNING') {
+                        setSolutionMoves(prev => [...prev, moveData.move]);
+                    }
+                    
+                    lastProcessedMoveId.current = moveData.id;
+                });
+                
+                setCurrentCubeState(newState);
+
+                // Check for Solved State (Auto-Stop)
+                if (timerState === 'RUNNING') {
+                    const isSolved = isStateSolved(newState);
+                    if (isSolved) {
+                        console.log("✅ Cube solved, stopping timer");
+                        stopTimer();
+                    }
                 }
             }
         }
+    } else {
+        // Reset processed ID on disconnect
+        lastProcessedMoveId.current = 0;
     }
-  }, [smartCube?.isConnected, smartCube?.lastMove]);
+  }, [smartCube?.isConnected, smartCube?.moveHistory, timerState]);
 
   // Initialize state when scramble changes
   useEffect(() => {
       if (scramble) {
-          let state = getSolvedState(cubeType === '2x2' ? 2 : cubeType === '4x4' ? 4 : 3);
-          const moves = scramble.split(' ');
-          moves.forEach(move => {
-              if (!move) return;
-              state = applyCubeMove(state, move, cubeType);
+          getSolvedState(cubeType === '2x2' ? 2 : cubeType === '4x4' ? 4 : 3).then(initialState => {
+              let state = initialState;
+              const moves = scramble.split(' ');
+              moves.forEach(move => {
+                  if (!move) return;
+                  state = applyCubeMove(state, move, cubeType);
+              });
+              setCurrentCubeState(state);
           });
-          setCurrentCubeState(state);
       }
   }, [scramble, cubeType]);
 
@@ -217,11 +236,15 @@ const TimerView = ({
   }, [scramble, onSolveComplete, dailyMode, cubeType, penalty, recentSolves, solutionMoves]);
 
   const resetTimer = () => {
-    setTimerState('IDLE');
-    setTime(0);
-    setSolutionMoves([]); // Reset solution tracking
-    if (!disableScrambleGen) setScramble(generateScramble(cubeType));
-  };
+  setTimerState('IDLE');
+  setTime(0);
+  setSolutionMoves([]); // Reset solution tracking
+  // Set to latest move ID to skip re-processing old moves
+  if (smartCube?.moveHistory && smartCube.moveHistory.length > 0) {
+    lastProcessedMoveId.current = smartCube.moveHistory[smartCube.moveHistory.length - 1].id;
+  }
+  if (!disableScrambleGen) setScramble(generateScramble(cubeType));
+};
 
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -518,7 +541,7 @@ const TimerView = ({
           {smartCube && smartCube.isConnected && (
               <button onMouseUp={blurOnUI} onClick={() => {
                   setSyncTrigger(prev => prev + 1);
-                  setCurrentCubeState(getSolvedState(3)); // Reset internal state to solved
+                  getSolvedState(3).then(s => setCurrentCubeState(s)); // Reset internal state to solved
                   // Reset scramble progress
                   setScrambleIndex(0);
                   setCorrectionStack([]);
@@ -537,19 +560,18 @@ const TimerView = ({
             </div>
         )}
 
-        {/* 3D CUBE (Main View) */}
-        <div className="mt-4 relative z-10">
-            <SmartCube3D 
-                scramble={scramble} 
-                type={cubeType} 
-                customState={smartCube?.isConnected && smartCube?.lastMove ? smartCube.lastMove : null} 
-                isConnected={smartCube?.isConnected}
-                syncTrigger={syncTrigger}
-            />
-        </div>
+      </div>
 
-        {/* 2D NET (Optional Side View) */}
-
+      {/* 3D CUBE (Always Visible) */}
+      <div className="mb-8 relative z-10 w-full max-w-lg mx-auto h-48 md:h-64">
+          <SmartCube3D 
+              scramble={scramble} 
+              type={cubeType} 
+              moveHistory={smartCube?.isConnected ? smartCube.moveHistory : null} 
+              isConnected={smartCube?.isConnected}
+              syncTrigger={syncTrigger}
+              className="h-full w-full"
+          />
       </div>
 
       <div className={`text-[6rem] md:text-[12rem] font-black font-mono tabular-nums leading-none tracking-tighter transition-colors duration-100 ${getTimerColor()} flex flex-col items-center`}>

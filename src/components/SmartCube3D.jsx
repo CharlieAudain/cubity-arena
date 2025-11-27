@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { TwistyPlayer } from 'cubing/twisty';
 
-const SmartCube3D = ({ scramble, type = '3x3', customState, onInit, isConnected, syncTrigger, className = "h-48 md:h-64" }) => {
+const SmartCube3D = ({ scramble, type = '3x3', moveHistory, onInit, isConnected, syncTrigger, className = "h-48 md:h-64" }) => {
   const containerRef = useRef(null);
   const playerRef = useRef(null);
 
@@ -48,7 +48,7 @@ const SmartCube3D = ({ scramble, type = '3x3', customState, onInit, isConnected,
         if (isConnected) {
             playerRef.current.alg = ""; // Reset to solved
             playerRef.current.jumpToEnd();
-        } else if (!customState) {
+        } else if (!moveHistory) {
             playerRef.current.alg = scramble || '';
             playerRef.current.jumpToEnd();
         }
@@ -88,12 +88,23 @@ const SmartCube3D = ({ scramble, type = '3x3', customState, onInit, isConnected,
   }, [syncTrigger, isConnected]);
 
   // Handle Live Moves
+  // Handle Live Moves
+  const lastProcessedMoveId = useRef(0);
+
   useEffect(() => {
-      if (customState && customState.move) {
-          moveQueue.current.push(customState.move);
-          processQueue();
+      if (moveHistory && moveHistory.length > 0) {
+          const newMoves = moveHistory.filter(m => m.id > lastProcessedMoveId.current);
+          
+          newMoves.forEach(moveData => {
+              moveQueue.current.push(moveData.move);
+              lastProcessedMoveId.current = moveData.id;
+          });
+
+          if (newMoves.length > 0) {
+              processQueue();
+          }
       }
-  }, [customState]);
+  }, [moveHistory]);
   
   return (
     <div ref={containerRef} className={`w-full flex items-center justify-center ${className}`} />

@@ -19,7 +19,9 @@ const BattleRoom = ({ user, roomData, roomId, onExit, smartCube }) => {
 
     // Determine Host Status (Prefer explicit flag from server, fallback to UID check)
     const amIPlayer1 = roomData.isHost !== undefined ? roomData.isHost : (user.uid === roomData.player1.uid);
-    const opponentName = amIPlayer1 ? roomData.player2?.name : roomData.player1.name;
+    const opponentName = amIPlayer1 
+        ? (roomData.player2?.displayName || roomData.player2?.name) 
+        : (roomData.player1?.displayName || roomData.player1?.name);
     
     const socket = useSocket();
     const lastOpTimestamp = useRef(0);
