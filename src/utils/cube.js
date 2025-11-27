@@ -77,38 +77,35 @@ export const isStateSolved = (state) => {
   if (!state) return false;
   
   try {
+    // Use isIdentical - this is the reliable method confirmed by testing
     const puzzle = state.kpuzzle;
+    const defaultPattern = puzzle.defaultPattern();
+    const result = state.isIdentical(defaultPattern);
     
-    // Use the puzzle's built-in solved check if available
-    if (puzzle.definition?.experimentalIsPatternSolved && state.patternData) {
-      try {
-        return puzzle.definition.experimentalIsPatternSolved(state.patternData, {
-          ignorePuzzleOrientation: true
-        });
-      } catch (expError) {
-        // Fall through to isIdentical
-      }
+    // Diagnostic logging for failed checks
+    if (!result) {
+      console.log("[cube.js] isStateSolved: FALSE");
+      console.log("  Current state EDGES pieces:", state.patternData?.EDGES?.pieces?.slice(0, 4));
+      console.log("  Solved state EDGES pieces:", defaultPattern.patternData?.EDGES?.pieces?.slice(0, 4));
+      console.log("  Current CORNERS pieces:", state.patternData?.CORNERS?.pieces?.slice(0, 4));
+      console.log("  Solved CORNERS pieces:", defaultPattern.patternData?.CORNERS?.pieces?.slice(0, 4));
     }
     
-    // Fallback to isIdentical
-    const defaultPattern = puzzle.defaultPattern();
-    return state.isIdentical(defaultPattern);
+    return result;
   } catch (e) {
-    console.error("[isStateSolved] Error:", e);
+    console.error("[cube.js] isStateSolved error:", e);
     return false;
   }
 };
 
 export const applyCubeMove = (state, move, type) => {
   if (!state) return null;
-  // Apply move to the KPattern
+  
   try {
-      // cubing.js expects moves like "R", "R'", "R2"
-      // Our move input is already in standard notation.
-      return state.applyAlg(move);
+    return state.applyAlg(move);
   } catch (e) {
-      console.error("Invalid move applied:", move, e);
-      return state;
+    console.error(`[cube.js] Failed to apply move "${move}":`, e.message);
+    return state;
   }
 };
 

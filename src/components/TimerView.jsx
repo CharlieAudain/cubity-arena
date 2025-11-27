@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Trophy, Swords, RotateCcw, Grid2x2, Box, Grid3x3 } from 'lucide-react';
-import { generateScramble, getDailySeed, getSolvedState, applyCubeMove, getInverseMove, simplifyMoveStack, isStateSolved } from '../utils/cube';
+import { generateScramble, getDailySeed, getSolvedState, getInverseMove, simplifyMoveStack } from '../utils/cube';
 import { calculateAverage } from '../utils/stats';
 import SmartCube3D from './SmartCube3D';
 
@@ -27,7 +27,6 @@ const TimerView = ({
   const [timerState, setTimerState] = useState('IDLE'); 
   const [cubeType, setCubeType] = useState('3x3'); 
   const [scramble, setScramble] = useState(forcedScramble || '');
-  const [currentCubeState, setCurrentCubeState] = useState(null); // Live cube state
   const [syncTrigger, setSyncTrigger] = useState(0); // Manual sync trigger
   const [showSyncPrompt, setShowSyncPrompt] = useState(false);
   
@@ -63,22 +62,14 @@ const TimerView = ({
     if (smartCube && smartCube.isConnected) {
         setShowSyncPrompt(true); // Show one-time sync prompt
 
-        if (smartCube.moveHistory && smartCube.moveHistory.length > 0 && currentCubeState) {
+        if (smartCube.moveHistory && smartCube.moveHistory.length > 0) {
             // Process all new moves from history
             const newMoves = smartCube.moveHistory.filter(m => m.id > lastProcessedMoveId.current);
             
             if (newMoves.length > 0) {
-                let newState = currentCubeState;
+                console.log(`[TimerView] Processing ${newMoves.length} new move(s):`, newMoves.map(m => m.move).join(', '));
                 
-                newMoves.forEach(moveData => {
-                    // Update live state
-                    const nextState = applyCubeMove(newState, moveData.move, cubeType);
-                    if (nextState) {
-                        newState = nextState;
-                    } else {
-                        console.error("Failed to apply move:", moveData.move);
-                    }
-                    
+                newMoves.forEach((moveData, idx) => {
                     // Notify Parent (BattleRoom)
                     if (onMove) onMove(moveData.move);
 
@@ -89,17 +80,6 @@ const TimerView = ({
                     
                     lastProcessedMoveId.current = moveData.id;
                 });
-                
-                setCurrentCubeState(newState);
-
-                // Check for Solved State (Auto-Stop)
-                if (timerState === 'RUNNING') {
-                    const isSolved = isStateSolved(newState);
-                    if (isSolved) {
-                        console.log("✅ Cube solved, stopping timer");
-                        stopTimer();
-                    }
-                }
             }
         }
     } else {
@@ -107,6 +87,8 @@ const TimerView = ({
         lastProcessedMoveId.current = 0;
     }
   }, [smartCube?.isConnected, smartCube?.moveHistory, timerState]);
+
+
 
   // Initialize state when scramble changes
   useEffect(() => {
@@ -116,9 +98,9 @@ const TimerView = ({
               const moves = scramble.split(' ');
               moves.forEach(move => {
                   if (!move) return;
-                  state = applyCubeMove(state, move, cubeType);
+                  // state = applyCubeMove(state, move, cubeType); // No longer needed
               });
-              setCurrentCubeState(state);
+              // setCurrentCubeState(state);
           });
       }
   }, [scramble, cubeType]);
@@ -234,6 +216,14 @@ const TimerView = ({
 
     onSolveComplete(finalTime, scramble, dailyMode, cubeType, penalty, detailedData); 
   }, [scramble, onSolveComplete, dailyMode, cubeType, penalty, recentSolves, solutionMoves]);
+
+  // Callback from SmartCube3D when solved
+  const handleSolved = useCallback(() => {
+      if (timerState === 'RUNNING') {
+          console.log("🎉 CUBE SOLVED (via TwistyPlayer)! Stopping timer...");
+          stopTimer();
+      }
+  }, [timerState, stopTimer]);
 
   const resetTimer = () => {
   setTimerState('IDLE');
@@ -541,7 +531,7 @@ const TimerView = ({
           {smartCube && smartCube.isConnected && (
               <button onMouseUp={blurOnUI} onClick={() => {
                   setSyncTrigger(prev => prev + 1);
-                  getSolvedState(3).then(s => setCurrentCubeState(s)); // Reset internal state to solved
+                  // getSolvedState(3).then(s => setCurrentCubeState(s)); // Removed
                   // Reset scramble progress
                   setScrambleIndex(0);
                   setCorrectionStack([]);
@@ -568,6 +558,8 @@ const TimerView = ({
               scramble={scramble} 
               type={cubeType} 
               moveHistory={smartCube?.isConnected ? smartCube.moveHistory : null} 
+              gyro={smartCube?.gyro}
+              onSolved={handleSolved}
               isConnected={smartCube?.isConnected}
               syncTrigger={syncTrigger}
               className="h-full w-full"

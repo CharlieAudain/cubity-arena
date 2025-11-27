@@ -1,11 +1,17 @@
 import React, { useEffect, useRef } from 'react';
 import { TwistyPlayer } from 'cubing/twisty';
+import * as THREE from 'three';
 
-const SmartCube3D = ({ scramble, type = '3x3', moveHistory, onInit, isConnected, syncTrigger, className = "h-48 md:h-64" }) => {
+const SmartCube3D = ({ scramble, type = '3x3', moveHistory, gyro, onInit, onSolved, isConnected, syncTrigger, className = "h-48 md:h-64" }) => {
   const containerRef = useRef(null);
   const playerRef = useRef(null);
-
-
+  const twistySceneRef = useRef(null);
+  const twistyVantageRef = useRef(null);
+  
+  // Gyro State
+  const basisRef = useRef(null);
+  const cubeQuaternion = useRef(new THREE.Quaternion());
+  const homeOrientation = useRef(new THREE.Quaternion().setFromEuler(new THREE.Euler(15 * Math.PI / 180, -20 * Math.PI / 180, 0)));
 
   useEffect(() => {
     // Initialize player
@@ -24,10 +30,23 @@ const SmartCube3D = ({ scramble, type = '3x3', moveHistory, onInit, isConnected,
       player.style.height = '100%';
       player.setAttribute('control-panel', 'none');
       player.setAttribute('background', 'none');
-      player.tempoScale = 5; // Speed up animations to prevent skipping
+      player.tempoScale = 5; // Speed up animations
       
       containerRef.current.appendChild(player);
       playerRef.current = player;
+      
+      // Solved Detection Listener
+      if (onSolved) {
+        player.experimentalModel.currentPattern.addFreshListener(async (kpattern) => {
+             // Check if solved
+             // We can compare with default pattern
+             const puzzle = await player.experimentalPuzzle();
+             const defaultPattern = await puzzle.defaultPattern();
+             if (kpattern.isIdentical(defaultPattern)) {
+                 onSolved();
+             }
+        });
+      }
       
       if (onInit) onInit(player);
     }
@@ -40,11 +59,53 @@ const SmartCube3D = ({ scramble, type = '3x3', moveHistory, onInit, isConnected,
     };
   }, []); // Run once on mount
 
+  // Gyro Animation Loop
+  useEffect(() => {
+      let animationFrameId;
+
+      const animate = async () => {
+          if (playerRef.current) {
+              if (!twistySceneRef.current || !twistyVantageRef.current) {
+                  const vantageList = await playerRef.current.experimentalCurrentVantages();
+                  twistyVantageRef.current = [...vantageList][0];
+                  if (twistyVantageRef.current) {
+                      twistySceneRef.current = await twistyVantageRef.current.scene.scene();
+                  }
+              }
+
+              if (twistySceneRef.current) {
+                  // Slerp for smooth rotation
+                  twistySceneRef.current.quaternion.slerp(cubeQuaternion.current, 0.25);
+                  twistyVantageRef.current.render();
+              }
+          }
+          animationFrameId = requestAnimationFrame(animate);
+      };
+
+      animate();
+
+      return () => {
+          cancelAnimationFrame(animationFrameId);
+      };
+  }, []);
+
+  // Handle Gyro Updates
+  useEffect(() => {
+      if (gyro && isConnected) {
+          const { x, y, z, w } = gyro;
+          const quat = new THREE.Quaternion(x, z, -y, w).normalize();
+          
+          if (!basisRef.current) {
+              basisRef.current = quat.clone().conjugate();
+          }
+          
+          cubeQuaternion.current.copy(quat.premultiply(basisRef.current).premultiply(homeOrientation.current));
+      }
+  }, [gyro, isConnected]);
+
   // Handle Scramble Updates
   useEffect(() => {
     if (playerRef.current) {
-        // If connected, we want to start from solved (or current state) so the user can scramble.
-        // If NOT connected, we show the scramble to be solved.
         if (isConnected) {
             playerRef.current.alg = ""; // Reset to solved
             playerRef.current.jumpToEnd();
@@ -66,16 +127,14 @@ const SmartCube3D = ({ scramble, type = '3x3', moveHistory, onInit, isConnected,
       const move = moveQueue.current.shift();
 
       try {
-          // experimentalAddMove returns a promise that resolves when the animation is done
           await playerRef.current.experimentalAddMove(move); 
       } catch (e) {
           console.error("Animation error:", e);
-          // Fallback: just wait a bit if it failed or didn't return a promise
           await new Promise(r => setTimeout(r, 150)); 
       }
 
       isAnimating.current = false;
-      processQueue(); // Process next move
+      processQueue(); 
   };
 
   // Handle Manual Sync Trigger
@@ -84,10 +143,10 @@ const SmartCube3D = ({ scramble, type = '3x3', moveHistory, onInit, isConnected,
           playerRef.current.alg = ""; // Reset to solved
           playerRef.current.jumpToEnd();
           moveQueue.current = []; // Clear queue
+          basisRef.current = null; // Reset gyro basis
       }
   }, [syncTrigger, isConnected]);
 
-  // Handle Live Moves
   // Handle Live Moves
   const lastProcessedMoveId = useRef(0);
 

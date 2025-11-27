@@ -10,6 +10,7 @@ export const useSmartCube = () => {
   const [lastMove, setLastMove] = useState(null);
   const [moveHistory, setMoveHistory] = useState([]); // Rolling buffer of last 50 moves
   const [facelets, setFacelets] = useState(null);
+  const [gyro, setGyro] = useState(null);
   const [error, setError] = useState(null);
   const [isMacRequired, setIsMacRequired] = useState(false); // New state
   const connRef = useRef(null);
@@ -24,10 +25,12 @@ export const useSmartCube = () => {
 
       subRef.current = conn.events$.subscribe((event) => {
         if (event.type === 'MOVE') {
-          console.log("[useSmartCube] Received move:", event.move);
           const newMove = { move: event.move, time: Date.now(), id: Date.now() + Math.random() };
           setLastMove(newMove);
           setMoveHistory(prev => [...prev.slice(-49), newMove]);
+        }
+        if (event.type === 'GYRO') {
+            setGyro(event.quaternion);
         }
         if (event.type === 'FACELETS') {
             setFacelets(event.facelets);
@@ -36,6 +39,7 @@ export const useSmartCube = () => {
             setIsConnected(false);
             setDeviceName(null);
             setFacelets(null);
+            setGyro(null);
         }
       });
   };
@@ -135,5 +139,5 @@ export const useSmartCube = () => {
       };
   };
 
-  return { isConnected, deviceName, deviceMAC, connectCube, disconnectCube, connectMockCube, lastMove, moveHistory, facelets, error, isMacRequired, retryWithMac };
+  return { isConnected, deviceName, deviceMAC, connectCube, disconnectCube, connectMockCube, lastMove, moveHistory, facelets, gyro, error, isMacRequired, retryWithMac };
 };

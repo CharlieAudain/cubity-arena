@@ -31,8 +31,8 @@ const db = getFirestore(firebaseApp);
 const ALLOWED_ORIGINS = process.env.NODE_ENV === 'production' 
     ? [
         'https://cubity-arena.vercel.app',
-        'https://cubity.gg',
-        'https://www.cubity.gg',
+        'https://cubity.app',
+        'https://www.cubity.app',
         process.env.RAILWAY_URL, // Railway server URL
         ...(process.env.CUSTOM_ORIGINS ? process.env.CUSTOM_ORIGINS.split(',') : [])
       ].filter(Boolean) // Remove undefined values
