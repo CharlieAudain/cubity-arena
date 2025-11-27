@@ -14,6 +14,7 @@ import TimerView from './components/TimerView';
 import StatsView from './components/StatsView';
 import ArenaView from './components/ArenaView';
 import LogoVelocity from './components/LogoVelocity';
+import EmailPasswordAuth from './components/EmailPasswordAuth';
 import { useSmartCube } from './hooks/useSmartCube';
 import { blurOnUI } from './utils/ui';
 
@@ -29,7 +30,8 @@ export default function App() {
   const [tempName, setTempName] = useState("");
   const [nameError, setNameError] = useState(null); 
   const [dailyCompleted, setDailyCompleted] = useState(false);
-  const [recentSolves, setRecentSolves] = useState([]); 
+  const [recentSolves, setRecentSolves] = useState([]);
+  const [showEmailAuth, setShowEmailAuth] = useState(false); 
 
   // SMART CUBE HOOK
   const smartCube = useSmartCube();
@@ -265,6 +267,19 @@ export default function App() {
               </button>
               <div className="absolute right-0 top-full mt-2 w-48 bg-slate-900 border border-white/10 rounded-xl shadow-xl opacity-0 invisible transform -translate-y-2 scale-95 group-hover:opacity-100 group-hover:visible group-hover:translate-y-0 group-hover:scale-100 transition-all duration-200 ease-out origin-top-right overflow-hidden z-50">
                 <div className="p-1">
+                  {user.isAnonymous && (
+                    <>
+                      <button onMouseUp={blurOnUI} onClick={() => setShowEmailAuth(true)} className="w-full flex items-center gap-2 px-4 py-3 text-sm text-blue-400 hover:bg-blue-500/10 hover:text-blue-300 rounded-lg transition-colors font-medium">
+                        <LogIn className="w-4 h-4" />
+                        <span>Convert with Email</span>
+                      </button>
+                      <button onMouseUp={blurOnUI} onClick={handleGoogleLogin} className="w-full flex items-center gap-2 px-4 py-3 text-sm text-blue-400 hover:bg-blue-500/10 hover:text-blue-300 rounded-lg transition-colors font-medium">
+                        <LogIn className="w-4 h-4" />
+                        <span>Convert with Google</span>
+                      </button>
+                      <div className="h-px bg-white/10 my-1"></div>
+                    </>
+                  )}
                   <button onMouseUp={blurOnUI} onClick={() => setActiveTab('more')} className="w-full flex items-center gap-2 px-4 py-3 text-sm text-slate-300 hover:bg-white/5 hover:text-white rounded-lg transition-colors font-medium">
                     <Settings className="w-4 h-4" />
                     <span>Settings</span>
@@ -277,10 +292,16 @@ export default function App() {
               </div>
             </div>
           ) : (
-            <button onMouseUp={blurOnUI} onClick={handleGoogleLogin} className="flex items-center gap-2 text-sm font-bold text-slate-900 bg-white hover:bg-slate-200 px-4 py-2 rounded-lg transition-colors">
-              <LogIn className="w-4 h-4" />
-              <span>Sign In</span>
-            </button>
+            <div className="flex items-center gap-2">
+              <button onMouseUp={blurOnUI} onClick={() => setShowEmailAuth(true)} className="flex items-center gap-2 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg transition-colors">
+                <LogIn className="w-4 h-4" />
+                <span>Email</span>
+              </button>
+              <button onMouseUp={blurOnUI} onClick={handleGoogleLogin} className="flex items-center gap-2 text-sm font-bold text-slate-900 bg-white hover:bg-slate-200 px-4 py-2 rounded-lg transition-colors">
+                <LogIn className="w-4 h-4" />
+                <span>Google</span>
+              </button>
+            </div>
           )}
         </div>
       </header>
@@ -471,6 +492,14 @@ export default function App() {
         <NavIcon icon={TrendingUp} label="Stats" active={activeTab === 'stats'} onClick={() => setActiveTab('stats')} />
         <NavIcon icon={Settings} label="More" active={activeTab === 'more'} onClick={() => setActiveTab('more')} />
       </nav>
+
+      {/* Email/Password Auth Modal */}
+      {showEmailAuth && (
+        <EmailPasswordAuth 
+          onClose={() => setShowEmailAuth(false)} 
+          user={user}
+        />
+      )}
 
     </div>
   );
