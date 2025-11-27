@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  Users, Zap, Settings, Timer, LogIn, Activity, Bluetooth, Flame, LogOut, Swords, AlertCircle, TrendingUp, Trophy, Shield, User 
+  Users, Zap, Settings, Timer, LogIn, Activity, Bluetooth, Flame, LogOut, Swords, AlertCircle, TrendingUp, Trophy, Shield, User, Lock 
 } from 'lucide-react';
 import { 
   onAuthStateChanged, signInAnonymously, signOut, GoogleAuthProvider, signInWithPopup, linkWithPopup 
@@ -654,6 +654,24 @@ export default function App() {
                     )}
                 </div>
 
+                {/* Account Security (Password Linking) */}
+                {user && !user.providerData.some(p => p.providerId === 'password') && (
+                    <div className="bg-slate-900 border border-white/10 rounded-xl p-6 mb-6">
+                        <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                            <Shield className="w-5 h-5 text-blue-400" /> Account Security
+                        </h3>
+                        <p className="text-sm text-slate-400 mb-4">
+                            You are currently signed in with Google. Set a password to log in with your email address as well.
+                        </p>
+                        <button 
+                            onClick={() => setShowEmailAuth(true)}
+                            className="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-lg font-bold transition-colors flex items-center justify-center gap-2"
+                        >
+                            <Lock className="w-4 h-4" /> Set Password
+                        </button>
+                    </div>
+                )}
+
                 <div className="bg-slate-900 border border-white/10 rounded-xl p-6">
                     <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
                         <Users className="w-5 h-5 text-indigo-400" /> Account
@@ -670,7 +688,7 @@ export default function App() {
         <NavIcon icon={Timer} label="Timer" active={activeTab === 'timer'} onClick={() => setActiveTab('timer')} />
         <NavIcon icon={Swords} label="Arena" active={activeTab === 'arena'} onClick={() => setActiveTab('arena')} />
         <NavIcon icon={TrendingUp} label="Stats" active={activeTab === 'stats'} onClick={() => setActiveTab('stats')} />
-        <NavIcon icon={Settings} label="More" active={activeTab === 'more'} onClick={() => setActiveTab('more')} />
+        <NavIcon icon={Settings} label="Settings" active={activeTab === 'more'} onClick={() => setActiveTab('more')} />
       </nav>
 
       {/* Email/Password Auth Modal */}
