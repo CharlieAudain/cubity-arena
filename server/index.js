@@ -5,13 +5,53 @@ import cors from 'cors';
 import { v4 as uuidv4 } from 'uuid';
 
 const app = express();
-app.use(cors());
+
+// CORS Configuration - Whitelist allowed origins
+const ALLOWED_ORIGINS = process.env.NODE_ENV === 'production' 
+    ? [
+        'https://cubity-arena.vercel.app',
+        'https://cubity.gg',
+        'https://www.cubity.gg'
+      ]
+    : [
+        'http://localhost:5173',
+        'http://localhost:3000',
+        'http://127.0.0.1:5173'
+      ];
+
+// Express CORS middleware
+app.use(cors({
+    origin: (origin, callback) => {
+        // Allow requests with no origin (mobile apps, Postman, etc.)
+        if (!origin) return callback(null, true);
+        
+        if (ALLOWED_ORIGINS.includes(origin)) {
+            callback(null, true);
+        } else {
+            console.warn(`CORS blocked origin: ${origin}`);
+            callback(new Error('Not allowed by CORS'));
+        }
+    },
+    credentials: true
+}));
 
 const httpServer = createServer(app);
+
+// Socket.IO CORS configuration
 const io = new Server(httpServer, {
     cors: {
-        origin: "*", // Allow all origins for dev
-        methods: ["GET", "POST"]
+        origin: (origin, callback) => {
+            if (!origin) return callback(null, true);
+            
+            if (ALLOWED_ORIGINS.includes(origin)) {
+                callback(null, true);
+            } else {
+                console.warn(`Socket.IO CORS blocked origin: ${origin}`);
+                callback(new Error('Not allowed by CORS'));
+            }
+        },
+        methods: ["GET", "POST"],
+        credentials: true
     }
 });
 
