@@ -4,7 +4,7 @@ import { auth } from '../lib/firebase';
 
 const EmailPasswordAuth = ({ onClose, user }) => {
     const [isSignUp, setIsSignUp] = useState(false);
-    const [email, setEmail] = useState('');
+    const [email, setEmail] = useState(user?.email || '');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
@@ -107,7 +107,8 @@ const EmailPasswordAuth = ({ onClose, user }) => {
                             onChange={(e) => setEmail(e.target.value)}
                             placeholder="your@email.com"
                             required
-                            className="w-full px-4 py-3 bg-slate-800 border border-white/10 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 transition-colors"
+                            disabled={!!user} // Disable if user exists (linking mode)
+                            className={`w-full px-4 py-3 bg-slate-800 border border-white/10 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 transition-colors ${user ? 'opacity-50 cursor-not-allowed' : ''}`}
                         />
                     </div>
 
