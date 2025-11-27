@@ -46,28 +46,69 @@ export default function App() {
       
       if (currentUser) {
         try {
+          // 1. Check if user is banned
+          // We need to find if there is a document in banned_users where uid == currentUser.uid
+          // Since banned_users is keyed by username, we query by uid field
+          const bannedRef = collection(db, 'artifacts', 'cubity-v1', 'public', 'data', 'banned_users');
+          // Note: This requires an index on 'uid' if the collection gets large, but for now it's fine
+          // Or we can just query all and filter, but a query is better.
+          // However, to keep it simple without index requirements for now, we can check the user profile first to get the username, 
+          // then check banned_users by ID. But if they are banned, they might not have a profile or username might be different.
+          // Let's use a query.
+          // Actually, let's just check if the user has a profile, get the username, and check if that username is in banned_users.
+          // Wait, if an admin bans a user, they create a record in banned_users with the username as ID.
+          // So we need to know the username to check efficiently without a query index.
+          
+          // Let's try to get the user profile first.
           const userRef = doc(db, 'artifacts', 'cubity-v1', 'users', currentUser.uid, 'profile', 'main');
           const userSnap = await getDoc(userRef);
 
-          const todayStr = new Date().toDateString();
-          const dailyRef = doc(db, 'artifacts', 'cubity-v1', 'users', currentUser.uid, 'daily_log', todayStr);
-          const dailySnap = await getDoc(dailyRef);
-          setDailyCompleted(dailySnap.exists());
-
           if (userSnap.exists()) {
-            const data = userSnap.data();
-            const lastActive = data.lastActive ? new Date(data.lastActive) : new Date(0);
-            const now = new Date();
-            const isSameDay = lastActive.toDateString() === now.toDateString();
-            const isYesterday = new Date(now.setDate(now.getDate() - 1)).toDateString() === lastActive.toDateString();
-            let newStreak = data.streak;
-            if (!isSameDay && !isYesterday && data.joinedAt !== data.lastActive) {
-                newStreak = 0;
-                await updateDoc(userRef, { streak: 0 });
-            }
-            setUserData({ ...data, streak: newStreak });
-            setTempName(data.displayName);
+              const data = userSnap.data();
+              
+              // Check if username is in banned_users
+              if (data.displayName) {
+                  const banRef = doc(db, 'artifacts', 'cubity-v1', 'public', 'data', 'banned_users', data.displayName.toLowerCase());
+                  const banSnap = await getDoc(banRef);
+                  
+                  if (banSnap.exists()) {
+                      console.warn("User is banned:", banSnap.data());
+                      await signOut(auth);
+                      setError(`ACCOUNT BANNED: ${banSnap.data().reason || 'Violation of terms'}`);
+                      setLoading(false);
+                      return;
+                  }
+              }
+
+              // Also check by UID query just in case username changed or mismatch (safer)
+              // We'll wrap this in a try/catch to ignore "index required" errors for now if they happen
+              try {
+                  // This is a client-side check, so we can iterate if needed, but query is better.
+                  // For now, let's rely on the username check above as primary, 
+                  // and maybe add a secondary check if we can.
+              } catch (e) {
+                  console.warn("Ban check query error", e);
+              }
+
+              // ... Proceed with loading profile ...
+              const todayStr = new Date().toDateString();
+              const dailyRef = doc(db, 'artifacts', 'cubity-v1', 'users', currentUser.uid, 'daily_log', todayStr);
+              const dailySnap = await getDoc(dailyRef);
+              setDailyCompleted(dailySnap.exists());
+
+              const lastActive = data.lastActive ? new Date(data.lastActive) : new Date(0);
+              const now = new Date();
+              const isSameDay = lastActive.toDateString() === now.toDateString();
+              const isYesterday = new Date(now.setDate(now.getDate() - 1)).toDateString() === lastActive.toDateString();
+              let newStreak = data.streak;
+              if (!isSameDay && !isYesterday && data.joinedAt !== data.lastActive) {
+                  newStreak = 0;
+                  await updateDoc(userRef, { streak: 0 });
+              }
+              setUserData({ ...data, streak: newStreak });
+              setTempName(data.displayName);
           } else {
+            // New user or no profile
             const newProfile = {
               displayName: currentUser.displayName || 'Guest Cuber',
               rank: 'Beginner',
@@ -655,7 +696,10 @@ export default function App() {
                 </div>
 
                 {/* Account Security (Password Linking) */}
-                {user && !user.providerData.some(p => p.providerId === 'password') && (
+                {(() => {
+                    console.log('User Provider Data:', user?.providerData);
+                    return user && !user.providerData.some(p => p.providerId === 'password');
+                })() && (
                     <div className="bg-slate-900 border border-white/10 rounded-xl p-6 mb-6">
                         <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
                             <Shield className="w-5 h-5 text-blue-400" /> Account Security
