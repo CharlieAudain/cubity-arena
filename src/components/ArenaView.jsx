@@ -11,7 +11,7 @@ const blurOnUI = (e) => {
 
 import BattleRoom from './BattleRoom';
 
-const ArenaView = ({ user, smartCube }) => {
+const ArenaView = ({ user, smartCube, isAdmin }) => {
   const { status, roomId, roomData, findMatch, cancelSearch, error } = useMatchmaking(user);
 
   const [debugRoom, setDebugRoom] = useState(null);
@@ -39,32 +39,35 @@ const ArenaView = ({ user, smartCube }) => {
             </button>
             {error && <p className="text-red-400 text-xs mt-2">{error}</p>}
             
-            <div className="flex gap-2">
-                <button onClick={() => {
-                    setDebugRoom({
-                        id: 'debug-room-1',
-                        player1: { uid: user?.uid || 'p1', name: 'Host (P1)' },
-                        player2: { uid: 'other', name: 'Guest (P2)' },
-                        scramble: "R U R' U' R U R' U' R U R' U'",
-                        type: '3x3',
-                        isHost: true
-                    });
-                }} className="flex-1 mt-4 bg-slate-800 text-slate-500 text-[10px] px-2 py-2 rounded-lg font-mono hover:text-white hover:bg-slate-700 transition-colors">
-                    DEBUG: ENTER AS P1
-                </button>
-                <button onClick={() => {
-                    setDebugRoom({
-                        id: 'debug-room-1',
-                        player1: { uid: 'other', name: 'Host (P1)' },
-                        player2: { uid: user?.uid || 'p2', name: 'Guest (P2)' },
-                        scramble: "R U R' U' R U R' U' R U R' U'",
-                        type: '3x3',
-                        isHost: false
-                    });
-                }} className="flex-1 mt-4 bg-slate-800 text-slate-500 text-[10px] px-2 py-2 rounded-lg font-mono hover:text-white hover:bg-slate-700 transition-colors">
-                    DEBUG: ENTER AS P2
-                </button>
-            </div>
+            {/* DEBUG BUTTONS - ADMIN ONLY */}
+            {isAdmin && (
+              <div className="flex gap-2">
+                  <button onClick={() => {
+                      setDebugRoom({
+                          id: 'debug-room-1',
+                          player1: { uid: user?.uid || 'p1', name: 'Host (P1)' },
+                          player2: { uid: 'other', name: 'Guest (P2)' },
+                          scramble: "R U R' U' R U R' U' R U R' U'",
+                          type: '3x3',
+                          isHost: true
+                      });
+                  }} className="flex-1 mt-4 bg-purple-900/20 text-purple-400 text-[10px] px-2 py-2 rounded-lg font-mono hover:text-purple-300 hover:bg-purple-900/30 transition-colors border border-purple-500/20">
+                      🔧 DEBUG: ENTER AS P1
+                  </button>
+                  <button onClick={() => {
+                      setDebugRoom({
+                          id: 'debug-room-1',
+                          player1: { uid: 'other', name: 'Host (P1)' },
+                          player2: { uid: user?.uid || 'p2', name: 'Guest (P2)' },
+                          scramble: "R U R' U' R U R' U' R U R' U'",
+                          type: '3x3',
+                          isHost: false
+                      });
+                  }} className="flex-1 mt-4 bg-purple-900/20 text-purple-400 text-[10px] px-2 py-2 rounded-lg font-mono hover:text-purple-300 hover:bg-purple-900/30 transition-colors border border-purple-500/20">
+                      🔧 DEBUG: ENTER AS P2
+                  </button>
+              </div>
+            )}
           </div>
         </>
       )}
