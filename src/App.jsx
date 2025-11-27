@@ -34,7 +34,8 @@ export default function App() {
   const [dailyCompleted, setDailyCompleted] = useState(false);
   const [recentSolves, setRecentSolves] = useState([]);
   const [showEmailAuth, setShowEmailAuth] = useState(false);
-  const [showAdminDashboard, setShowAdminDashboard] = useState(false); 
+  const [showAdminDashboard, setShowAdminDashboard] = useState(false);
+  const [showUserMenu, setShowUserMenu] = useState(false);
 
   // SMART CUBE HOOK
   const smartCube = useSmartCube();
@@ -400,7 +401,7 @@ export default function App() {
             <div className="flex items-center gap-2">
               <button onMouseUp={blurOnUI} onClick={() => setShowEmailAuth(true)} className="flex items-center gap-2 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg transition-colors">
                 <LogIn className="w-4 h-4" />
-                <span>Email</span>
+                <span>Log In / Sign Up</span>
               </button>
               <button onMouseUp={blurOnUI} onClick={handleGoogleLogin} className="flex items-center gap-2 text-sm font-bold text-slate-900 bg-white hover:bg-slate-200 px-4 py-2 rounded-lg transition-colors">
                 <LogIn className="w-4 h-4" />

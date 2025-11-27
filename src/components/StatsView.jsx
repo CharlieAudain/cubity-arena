@@ -91,25 +91,17 @@ const StatsView = ({ userId }) => {
       return () => clearInterval(interval);
   }, [isPlaying, playbackIndex, optimizedSolution]);
 
-  // Update Cube State based on Playback Index
-  useEffect(() => {
-      if (!selectedSolve) return;
+  // Construct Current Algorithm for Playback
+  // Instead of calculating state manually, we pass the full alg string (scramble + moves so far)
+  // This allows TwistyPlayer to handle the state and transitions natively
+  const currentPlaybackAlg = React.useMemo(() => {
+      if (!selectedSolve) return "";
       
-      let state = getSolvedState(3);
-      // 1. Apply Scramble
-      if (selectedSolve.scramble) {
-          selectedSolve.scramble.split(' ').forEach(m => {
-              state = applyCubeMove(state, m, '3x3');
-          });
-      }
-      // 2. Apply Solution up to current index
-      for (let i = 0; i < playbackIndex; i++) {
-          if (optimizedSolution[i]) {
-              state = applyCubeMove(state, optimizedSolution[i], '3x3');
-          }
-      }
-      setPlaybackState(state);
-  }, [playbackIndex, selectedSolve, optimizedSolution]);
+      const scramble = selectedSolve.scramble || "";
+      const movesSoFar = optimizedSolution.slice(0, playbackIndex).join(" ");
+      
+      return `${scramble} ${movesSoFar}`.trim();
+  }, [selectedSolve, optimizedSolution, playbackIndex]);
 
   const displayAo5 = statsMode === 'current' 
     ? calculateAverage(filteredSolves, 5) 
@@ -176,7 +168,7 @@ const StatsView = ({ userId }) => {
                     {/* 3D Cube Preview */}
                     <div className="mb-4 relative">
                         <SmartCube3D 
-                            cubeState={playbackState} 
+                            scramble={currentPlaybackAlg} 
                             lastMove={null} // No live moves
                             isConnected={false}
                             className="h-32"
