@@ -236,8 +236,7 @@ const BattleRoom = ({ user, roomData, roomId, onExit, smartCube }) => {
                     {/* Opponent Cube */}
                     <div className="w-full h-64 md:h-80 relative opacity-80 hover:opacity-100 transition-opacity">
                         <SmartCube3D 
-                            cubeState={opponentCubeState} 
-                            lastMove={null} 
+                            facelets={opponentCubeState} 
                             isConnected={false} // It's a remote representation
                             className="h-full"
                         />

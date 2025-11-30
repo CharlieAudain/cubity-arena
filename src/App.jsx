@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Analytics } from '@vercel/analytics/react';
 import { 
   Users, Zap, Settings, Timer, LogIn, Activity, Bluetooth, Flame, LogOut, Swords, AlertCircle, TrendingUp, Trophy, Shield, User, Lock, X 
 } from 'lucide-react';
@@ -17,8 +18,10 @@ import LogoVelocity from './components/LogoVelocity';
 import EmailPasswordAuth from './components/EmailPasswordAuth';
 import AdminDashboard from './components/AdminDashboard';
 import UsernameSetup from './components/UsernameSetup';
-import { useSmartCube } from './hooks/useSmartCube';
+import HardwareTest from './components/HardwareTest';
+import { useHardwareDriver } from './hooks/useHardwareDriver';
 import { blurOnUI } from './utils/ui';
+import { Logger } from './utils/Logger';
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -37,8 +40,12 @@ export default function App() {
   const [showAdminDashboard, setShowAdminDashboard] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
 
-  // SMART CUBE HOOK
-  const smartCube = useSmartCube();
+  // SMART CUBE HOOK (Singleton Driver)
+  const smartCube = useHardwareDriver(userData?.savedMacAddress);
+
+  useEffect(() => {
+    Logger.init();
+  }, []);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
@@ -346,6 +353,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 font-sans pb-24 md:pb-0">
+      <Analytics />
       
       <header className="fixed top-0 w-full z-50 bg-slate-950/80 backdrop-blur-md border-b border-white/5 h-16 flex items-center justify-between px-4 lg:px-8">
         <div className="flex items-center gap-8">
@@ -367,6 +375,9 @@ export default function App() {
             </button>
             <button onMouseUp={blurOnUI} onClick={() => setActiveTab('stats')} className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center gap-2 ${activeTab === 'stats' ? 'text-white bg-white/10' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
               <TrendingUp className="w-4 h-4" /> Stats
+            </button>
+            <button onMouseUp={blurOnUI} onClick={() => setActiveTab('hardware-test')} className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center gap-2 ${activeTab === 'hardware-test' ? 'text-white bg-white/10' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
+              <Bluetooth className="w-4 h-4" /> Test
             </button>
           </nav>
         </div>
@@ -516,6 +527,8 @@ export default function App() {
         )}
 
         {activeTab === 'stats' && user && <StatsView userId={user.uid} />}
+        
+        {activeTab === 'hardware-test' && <HardwareTest />}
         
         {activeTab === 'arena' && user && <ArenaView user={user} smartCube={smartCube} isAdmin={isAdmin()} />}
 

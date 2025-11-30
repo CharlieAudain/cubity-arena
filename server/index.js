@@ -31,16 +31,12 @@ const db = getFirestore(firebaseApp);
 const ALLOWED_ORIGINS = process.env.NODE_ENV === 'production' 
     ? [
         'https://cubity-arena.vercel.app',
-        'https://cubity.app',
-        'https://www.cubity.app',
-        process.env.RAILWAY_URL, // Railway server URL
-        ...(process.env.CUSTOM_ORIGINS ? process.env.CUSTOM_ORIGINS.split(',') : [])
-      ].filter(Boolean) // Remove undefined values
+        'https://cubity.gg'
+      ]
     : [
-        'http://localhost:5173',
+        'http://localhost:5175',
         'http://localhost:3000',
-        'http://127.0.0.1:5173',
-        'http://localhost:5174' // Vite preview
+        'http://localhost:5173'
       ];
 
 // Express CORS middleware
@@ -70,27 +66,10 @@ app.use(cors({
 const httpServer = createServer(app);
 
 // Socket.IO CORS configuration
+// Socket.IO CORS configuration
 const io = new Server(httpServer, {
     cors: {
-        origin: (origin, callback) => {
-            // In development, allow requests with no origin
-            if (!origin && process.env.NODE_ENV !== 'production') {
-                return callback(null, true);
-            }
-            
-            // In production, reject requests with no origin
-            if (!origin) {
-                console.warn('Socket.IO CORS blocked: No origin header');
-                return callback(new Error('Origin header required'));
-            }
-            
-            if (ALLOWED_ORIGINS.includes(origin)) {
-                callback(null, true);
-            } else {
-                console.warn(`Socket.IO CORS blocked origin: ${origin}`);
-                callback(new Error('Not allowed by CORS'));
-            }
-        },
+        origin: ALLOWED_ORIGINS,
         methods: ["GET", "POST"],
         credentials: true
     }

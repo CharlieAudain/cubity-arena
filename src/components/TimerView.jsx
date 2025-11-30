@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Trophy, Swords, RotateCcw, Grid2x2, Box, Grid3x3 } from 'lucide-react';
+import { Trophy, Swords, RotateCcw, Grid2x2, Box, Grid3x3, Activity, Unplug } from 'lucide-react';
 import { generateScramble, getDailySeed, getSolvedState, getInverseMove, simplifyMoveStack } from '../utils/cube';
 import { calculateAverage } from '../utils/stats';
 import SmartCube3D from './SmartCube3D';
+import DebugOverlay from './DebugOverlay';
+import { LogicalCube } from '../engine/LogicalCube';
 
 // --- UTILS: HELPER TO PREVENT FOCUS STEALING ---
 const blurOnUI = (e) => {
@@ -29,6 +31,7 @@ const TimerView = ({
   const [scramble, setScramble] = useState(forcedScramble || '');
   const [syncTrigger, setSyncTrigger] = useState(0); // Manual sync trigger
   const [showSyncPrompt, setShowSyncPrompt] = useState(false);
+  const [showDebug, setShowDebug] = useState(false);
   
   // Inspection State
   const [inspectionTime, setInspectionTime] = useState(15);
@@ -38,10 +41,10 @@ const TimerView = ({
   const lastProcessedMoveId = useRef(0); // Track processed moves to avoid missing any
 
   // Scramble Tracking
-  const [scrambleIndex, setScrambleIndex] = useState(0);
-  const [scrambleMoves, setScrambleMoves] = useState([]);
-  const [correctionStack, setCorrectionStack] = useState([]); // Stack of moves to undo
-  const [partialMove, setPartialMove] = useState(null); // Track halfway state of double moves (e.g. "R" of "R2")
+  // Scramble Tracking
+  const [wrongMoves, setWrongMoves] = useState(0);
+  const [scrambleLost, setScrambleLost] = useState(false);
+  const [scrambleComplete, setScrambleComplete] = useState(false);
   
   // Activity Feed
   const [activityLog, setActivityLog] = useState([]);
@@ -69,7 +72,7 @@ const TimerView = ({
             if (newMoves.length > 0) {
                 console.log(`[TimerView] Processing ${newMoves.length} new move(s):`, newMoves.map(m => m.move).join(', '));
                 
-                newMoves.forEach((moveData, idx) => {
+                newMoves.forEach((moveData) => {
                     // Notify Parent (BattleRoom)
                     if (onMove) onMove(moveData.move);
 
@@ -86,7 +89,7 @@ const TimerView = ({
         // Reset processed ID on disconnect
         lastProcessedMoveId.current = 0;
     }
-  }, [smartCube?.isConnected, smartCube?.moveHistory, timerState]);
+  }, [smartCube, smartCube?.isConnected, smartCube?.moveHistory, onMove, timerState]);
 
 
 
@@ -159,69 +162,60 @@ const TimerView = ({
     }
   };
 
-  const startTimer = () => {
-    setTimerState('RUNNING');
-    startTimeRef.current = Date.now();
-    timerRef.current = setInterval(() => {
-      setTime(Date.now() - startTimeRef.current);
-    }, 10);
-  };
+  const startTimer = useCallback(() => {
+    if (timerState === 'IDLE' || timerState === 'INSPECTION') {
+      console.log(`[TimerView] Starting Timer (Previous State: ${timerState})`);
+      setTimerState('RUNNING');
+      startTimeRef.current = Date.now(); // Keep using ref for interval
+      setSolutionMoves([]); // Reset solution moves
+      
+      // Hide sync prompt when timer starts
+      setShowSyncPrompt(false);
+
+      timerRef.current = setInterval(() => {
+        setTime(Date.now() - startTimeRef.current);
+      }, 10);
+    }
+  }, [timerState]);
 
   const stopTimer = useCallback(() => {
-    if (timerRef.current) clearInterval(timerRef.current);
-    const finalTime = (Date.now() - startTimeRef.current) / 1000;
-    setTimerState('STOPPED');
-    
-    // Calculate Grade
-    let grade = '';
-    const currentAo5 = calculateAverage(recentSolves, 5); // Recalculate or pass in? 
-    // Note: recentSolves here is the OLD list (before this solve). That's actually good for comparison.
-    const numAo5 = parseFloat(currentAo5);
-    
-    if (!isNaN(numAo5) && numAo5 > 0) {
-        if (finalTime < numAo5 * 0.85) grade = '!!';
-        else if (finalTime > numAo5 * 1.15) grade = '??';
+    if (timerState === 'RUNNING') {
+      console.log("[TimerView] Stopping Timer");
+      
+      if (timerRef.current) clearInterval(timerRef.current);
+      
+      setTimerState('STOPPED');
+      const endTime = Date.now();
+      const elapsedMs = endTime - startTimeRef.current;
+      setTime(elapsedMs); // Set local state in milliseconds for display
+      
+      const timeInSeconds = elapsedMs / 1000;
+      
+      // Construct Detailed Data
+      const detailedData = {
+          solution: solutionMoves.join(' '),
+          splits: null // Placeholder for future CFOP analysis
+      };
+
+      // Notify Parent
+      if (onSolveComplete) {
+          onSolveComplete(timeInSeconds, scramble, dailyMode, cubeType, penalty, detailedData);
+      }
+      
+      // Generate new scramble
+      const nextScramble = generateScramble(cubeType);
+      setScramble(nextScramble);
     }
-
-    // Add to Activity Feed (Only if Smart Cube)
-    if (smartCube?.isConnected) {
-        const newLog = { 
-            id: Date.now(), 
-            type: 'SOLVE',
-            time: finalTime, 
-            grade, 
-            penalty,
-            isSmart: true 
-        };
-        setActivityLog(prev => [newLog, ...prev].slice(0, 20)); // Keep last 20
-        
-        // Trigger fade out after 7s
-        setTimeout(() => {
-            setActivityLog(prev => prev.map(l => l.id === newLog.id ? { ...l, isFading: true } : l));
-        }, 7000);
-
-        // Remove after 8s
-        setTimeout(() => {
-            setActivityLog(prev => prev.filter(l => l.id !== newLog.id));
-        }, 8000);
-    }
-
-    // Construct Detailed Data
-
-    // Construct Detailed Data
-    const detailedData = {
-        solution: solutionMoves.join(' '),
-        splits: null // Placeholder for future CFOP analysis
-    };
-
-    onSolveComplete(finalTime, scramble, dailyMode, cubeType, penalty, detailedData); 
-  }, [scramble, onSolveComplete, dailyMode, cubeType, penalty, recentSolves, solutionMoves]);
+  }, [timerState, scramble, solutionMoves, cubeType, dailyMode, penalty, onSolveComplete]);
 
   // Callback from SmartCube3D when solved
   const handleSolved = useCallback(() => {
+      console.log(`[TimerView] handleSolved called. TimerState: ${timerState}`);
       if (timerState === 'RUNNING') {
           console.log("🎉 CUBE SOLVED (via TwistyPlayer)! Stopping timer...");
           stopTimer();
+      } else {
+          console.warn(`[TimerView] Solved event ignored because timer is not RUNNING (State: ${timerState})`);
       }
   }, [timerState, stopTimer]);
 
@@ -238,19 +232,26 @@ const TimerView = ({
 
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if (smartCube?.isConnected) return; // Disable manual controls if smart cube connected
       if (e.code === 'Space') {
         e.preventDefault(); 
-        if (timerState === 'IDLE' || timerState === 'STOPPED') {
-          if (timerState === 'STOPPED') resetTimer();
+        // Allow reset even if smart cube is connected
+        if (timerState === 'STOPPED') {
+            resetTimer();
+            return;
+        }
+
+        // NO MANUAL START if smart cube is connected
+        if (smartCube?.isConnected) return; 
+
+        if (timerState === 'IDLE') {
           setTimerState('HOLDING');
           setTimeout(() => setTimerState(prev => prev === 'HOLDING' ? 'READY' : prev), 300);
         } else if (timerState === 'RUNNING') stopTimer();
       }
     };
     const handleKeyUp = (e) => {
-      if (smartCube?.isConnected) return; // Disable manual controls if smart cube connected
       if (e.code === 'Space') {
+        if (smartCube?.isConnected) return; // Disable manual controls
         if (timerState === 'READY') startTimer();
         else if (timerState === 'HOLDING') setTimerState('IDLE'); 
       }
@@ -315,14 +316,15 @@ const TimerView = ({
   };
 
   // Auto-start inspection on scramble complete
+  // Auto-start inspection on scramble complete
   useEffect(() => {
-      if (scrambleMoves.length > 0 && scrambleIndex === scrambleMoves.length && timerState === 'IDLE') {
+      if (scrambleComplete && timerState === 'IDLE' && !scrambleLost) {
           // Only auto-start if connected to smart cube
           if (smartCube && smartCube.isConnected) {
               startInspection();
           }
       }
-  }, [scrambleIndex, scrambleMoves.length, timerState, smartCube?.isConnected]);
+  }, [scrambleComplete, timerState, smartCube?.isConnected, scrambleLost]);
 
   // Handle move during inspection -> Start Solve
   useEffect(() => {
@@ -346,14 +348,18 @@ const TimerView = ({
   }, []);
 
   const handleTouchStart = () => {
-    if (smartCube?.isConnected) return; // Disable manual controls
-    if (timerState === 'IDLE' || timerState === 'STOPPED') {
-      if (timerState === 'STOPPED') resetTimer();
+    // Allow reset even if smart cube is connected
+    if (timerState === 'STOPPED') {
+        resetTimer();
+        return;
+    }
+
+    if (smartCube?.isConnected) return; // Disable manual controls for other states
+
+    if (timerState === 'IDLE') {
       setTimerState('HOLDING');
       setTimeout(() => setTimerState(prev => prev === 'HOLDING' ? 'READY' : prev), 300);
     } else if (timerState === 'RUNNING') stopTimer();
-    // Inspection touch handling? Usually inspection is hands-off until start.
-    // If user holds space/touch during inspection, they are preparing to start.
     else if (timerState === 'INSPECTION') {
         setTimerState('HOLDING');
         stopInspection();
@@ -365,14 +371,7 @@ const TimerView = ({
     if (smartCube?.isConnected) return; // Disable manual controls
     if (timerState === 'READY') startTimer();
     else if (timerState === 'HOLDING') {
-        // If they let go too early during inspection, resume inspection?
-        // Or go back to IDLE? WCA rules say if you start, you start.
-        // If they abort the hold, we should probably resume inspection or just go IDLE.
-        // Let's go back to INSPECTION for now if possible, or just IDLE.
         if (inspectionTime > 0) {
-             // Resume inspection? Complex. Let's just reset to IDLE for simplicity or keep INSPECTION running if we didn't stop it fully.
-             // Actually, we stopped it in touchStart.
-             // Let's just go to IDLE.
              setTimerState('IDLE');
         } else {
              setTimerState('IDLE');
@@ -384,123 +383,70 @@ const TimerView = ({
 
   useEffect(() => {
       if (scramble) {
-          setScrambleMoves(scramble.split(" ").filter(m => m));
-          setScrambleIndex(0);
-          setCorrectionStack([]);
-          setPartialMove(null);
+          setWrongMoves(0);
+          setScrambleLost(false);
+          setScrambleComplete(false);
+          
+          // Update LogicalCube target
+          LogicalCube.getInstance().then(engine => {
+              engine.setTargetScramble(scramble);
+          });
       }
   }, [scramble]);
 
   // Track Scramble Progress
+  // Track Scramble Progress via LogicalCube Events
   useEffect(() => {
-      if (smartCube && smartCube.isConnected && smartCube.lastMove && scrambleMoves.length > 0) {
-          // Stop tracking if scramble is already complete
-          if (scrambleIndex >= scrambleMoves.length) return;
-
-          const userMove = smartCube.lastMove.move;
+      const handleProgress = ({ wrongMoves, isComplete }) => {
+          setWrongMoves(wrongMoves);
+          setScrambleComplete(isComplete);
           
-          // 1. Check Correction Stack first
-          if (correctionStack.length > 0) {
-              const requiredCorrection = correctionStack[correctionStack.length - 1];
-              if (userMove === requiredCorrection) {
-                  // Correct correction! Pop from stack.
-                  setCorrectionStack(prev => prev.slice(0, -1));
-              } else {
-                  // Wrong move while correcting? Add to stack with simplification!
-                  setCorrectionStack(prev => simplifyMoveStack(prev, getInverseMove(userMove)));
-              }
-              return;
-          }
-
-          // 2. Check Normal Scramble Progress
-          const targetMove = scrambleMoves[scrambleIndex];
-          
-          // Helper to check if move is the first half of a double move
-          // e.g. target "R2", user "R" -> true. User "R'" -> true (since R' + R' = R2)
-          const isPartialMatch = (target, user) => {
-              if (!target) return false; // Guard against undefined
-              if (!target.includes("2")) return false;
-              // Must be same face
-              if (target[0] !== user[0]) return false;
-              // Any move on that face (R or R') is a valid start for R2
-              return true;
-          };
-
-          if (partialMove) {
-              // We are halfway through a double move (e.g. at "R", needing another "R" for "R2")
-              if (userMove === partialMove) {
-                  // Completed the double move!
-                  setPartialMove(null);
-                  setScrambleIndex(prev => Math.min(prev + 1, scrambleMoves.length));
-              } else if (userMove === getInverseMove(partialMove)) {
-                  // User undid the partial move (e.g. R then R')
-                  // Just clear partial state, back to start of this move
-                  setPartialMove(null);
-              } else {
-                  // Wrong move during partial!
-                  // Need to undo THIS move AND the partial move.
-                  // e.g. Partial "R", User "U" -> Stack ["U'", "R'"]
-                  const undoPartial = getInverseMove(partialMove);
-                  const undoUser = getInverseMove(userMove);
-                  setCorrectionStack([undoUser, undoPartial]);
-                  setPartialMove(null);
-              }
+          if (wrongMoves > 6) {
+              setScrambleLost(true);
           } else {
-              // Standard check
-              if (targetMove === userMove) {
-                  // Exact match (e.g. R2 -> R2, or R -> R)
-                  setScrambleIndex(prev => Math.min(prev + 1, scrambleMoves.length));
-              } else if (isPartialMatch(targetMove, userMove)) {
-                  // Partial match (e.g. R2 -> R)
-                  setPartialMove(userMove);
-              } else {
-                  // Wrong move!
-                  setCorrectionStack([getInverseMove(userMove)]);
-              }
+              setScrambleLost(false);
           }
-      }
-  }, [smartCube?.lastMove]);
+      };
+
+      LogicalCube.getInstance().then(engine => {
+          engine.on('scramble_progress', handleProgress);
+      });
+
+      return () => {
+          LogicalCube.getInstance().then(engine => {
+              engine.off('scramble_progress', handleProgress);
+          });
+      };
+  }, []);
 
   // Render Interactive Scramble
   const renderScramble = () => {
       if (!smartCube || !smartCube.isConnected) return scramble;
 
+      if (scrambleLost) {
+          return (
+              <div className="flex flex-col items-center animate-pulse">
+                  <div className="text-red-500 font-black text-4xl mb-2">⚠️ LOST SCRAMBLE</div>
+                  <div className="text-slate-400 text-sm">Please solve the cube to reset.</div>
+              </div>
+          );
+      }
+
       return (
           <div className="flex flex-wrap justify-center gap-x-3 gap-y-2 items-center">
-              {/* Render Correction Moves if any */}
-              {correctionStack.length > 0 && (
-                  <div className="flex gap-2 mr-4 animate-pulse">
-                      <span className="text-red-500 font-bold text-sm uppercase tracking-widest">UNDO:</span>
-                      {/* Show stack in reverse order (LIFO) - actually we just need to show the top one prominently */}
-                      {[...correctionStack].reverse().map((move, idx) => (
-                          <span key={`corr-${idx}`} className="text-red-400 font-bold text-2xl border border-red-500/50 rounded px-2 bg-red-900/20">
-                              {move}
-                          </span>
+              {/* Wrong Move Indicator */}
+              {wrongMoves > 0 && (
+                  <div className="flex gap-1 mr-4 animate-pulse">
+                      {Array.from({ length: wrongMoves }).map((_, i) => (
+                          <span key={i} className="text-red-500 text-2xl">❌</span>
                       ))}
                   </div>
               )}
 
-              {scrambleMoves.map((move, idx) => {
-                  const isDone = idx < scrambleIndex;
-                  const isCurrent = idx === scrambleIndex;
-                  // If correcting, dim the current move
-                  const isDimmed = correctionStack.length > 0 && isCurrent;
-                  // If partial, show yellow
-                  const isPartial = partialMove && isCurrent;
-
-                  return (
-                      <span key={idx} className={`
-                          font-mono transition-all duration-200
-                          ${isDone ? 'text-green-500/30 scale-90' : ''}
-                          ${isCurrent && !isDimmed ? 'text-blue-400 font-bold scale-125 mx-2' : ''}
-                          ${isPartial ? 'text-yellow-400' : ''}
-                          ${!isDone && !isCurrent ? 'text-slate-500' : ''}
-                          ${isDimmed ? 'text-slate-600 opacity-50' : ''}
-                      `}>
-                          {move}
-                      </span>
-                  );
-              })}
+              {/* Scramble Text */}
+              <span className={`font-mono text-slate-300 ${wrongMoves > 0 ? 'opacity-50' : 'opacity-100'}`}>
+                  {scramble}
+              </span>
           </div>
       );
   };
@@ -529,16 +475,20 @@ const TimerView = ({
           {!dailyMode && !disableScrambleGen && <button onMouseUp={blurOnUI} onClick={resetTimer} className="text-slate-600 hover:text-white transition-colors"><RotateCcw className="w-5 h-5" /></button>}
 
           {smartCube && smartCube.isConnected && (
+            <>
               <button onMouseUp={blurOnUI} onClick={() => {
+                  // Call driver reset
+                  if (smartCube.markAsSolved) smartCube.markAsSolved();
+                  
+                  // Reset UI state
                   setSyncTrigger(prev => prev + 1);
-                  // getSolvedState(3).then(s => setCurrentCubeState(s)); // Removed
-                  // Reset scramble progress
                   setScrambleIndex(0);
                   setCorrectionStack([]);
                   setPartialMove(null);
-              }} className="text-xs font-bold px-3 py-1 rounded-full border border-green-500/20 bg-green-500/10 text-green-400 hover:bg-green-500/20 transition-colors">
-                  Mark as Solved
+              }} className="text-xs font-bold px-6 py-2 rounded-full border border-green-500/20 bg-green-500/10 text-green-400 hover:bg-green-500/20 transition-colors flex items-center gap-2">
+                  <RotateCcw className="w-3 h-3" /> Mark as Solved
               </button>
+            </>
           )}
         </div>
 
@@ -559,6 +509,8 @@ const TimerView = ({
               type={cubeType} 
               moveHistory={smartCube?.isConnected ? smartCube.moveHistory : null} 
               gyro={smartCube?.gyro}
+              facelets={smartCube?.facelets}
+              lastAction={smartCube?.lastAction}
               onSolved={handleSolved}
               isConnected={smartCube?.isConnected}
               syncTrigger={syncTrigger}
@@ -661,6 +613,20 @@ const TimerView = ({
               </div>
           ))}
       </div>
+
+      {/* Debug Overlay Toggle */}
+      <button 
+        onClick={() => setShowDebug(!showDebug)}
+        className="fixed top-4 right-4 p-2 bg-slate-800/50 hover:bg-slate-700 text-slate-400 rounded-full transition-colors z-50"
+        title="Toggle Debug Mode"
+      >
+        <Activity className="w-4 h-4" />
+      </button>
+
+      {/* Debug Overlay */}
+      {showDebug && smartCube && (
+        <DebugOverlay logs={smartCube.debugLog || []} onClose={() => setShowDebug(false)} />
+      )}
     </div>
   );
 };
