@@ -1,4 +1,5 @@
 import mathlib from '../lib/cstimer/mathlib';
+import { getInverseMove, simplifyMoveStack } from '../utils/cube';
 
 // Extract CubieCube class and type from the default export
 const CubieCube = mathlib.CubieCube;
@@ -24,8 +25,11 @@ export class LogicalCube {
     private listeners: Record<string, Set<Listener>> = {};
     
     // Scramble Tracking
-    private wrongMoveCount: number = 0;
-    private expectedMoveSequence: string[] = [];
+    // Scramble Tracking
+    private scrambleMoves: string[] = [];
+    private progressIndex: number = 0;
+    private wrongMoves: string[] = [];
+    private partialMove: string | null = null;
 
     private constructor() {
         this.rawState = new CubieCube();
@@ -67,8 +71,11 @@ export class LogicalCube {
         const moves = scrambleAlg.split(/\s+/).filter(m => m);
         
         // Reset tracking
-        this.wrongMoveCount = 0;
-        this.expectedMoveSequence = [...moves];
+        // Reset tracking
+        this.scrambleMoves = [...moves];
+        this.progressIndex = 0;
+        this.wrongMoves = [];
+        this.partialMove = null;
         
         moves.forEach(move => {
             if (!move) return;
@@ -83,6 +90,20 @@ export class LogicalCube {
         // 3. Store target facelets
         this.targetFacelets = tempCube.toFaceCube();
         console.log(`[LogicalCube] 🎯 Target Scramble Set: ${this.targetFacelets}`);
+    }
+
+    /**
+     * Reset scramble tracking state (e.g. when user solves cube to reset)
+     */
+    public resetScrambleTracking() {
+        this.progressIndex = 0;
+        this.wrongMoves = [];
+        this.partialMove = null;
+        this.emit('scramble_progress', {
+            movesDone: 0,
+            wrongMoves: [],
+            isComplete: false
+        });
     }
 
     /**
@@ -116,21 +137,73 @@ export class LogicalCube {
         }
 
         // SCRAMBLE TRACKING:
-        if (this.expectedMoveSequence.length > 0) {
-            const expected = this.expectedMoveSequence[0];
-            if (moveStr === expected) {
-                // Correct move!
-                this.expectedMoveSequence.shift();
-                this.wrongMoveCount = 0;
-            } else {
-                // Wrong move
-                this.wrongMoveCount++;
+        if (this.scrambleMoves.length > 0) {
+            // 1. Check Correction (Undo) or Wrong Move Accumulation
+            if (this.wrongMoves.length > 0) {
+                this.wrongMoves = simplifyMoveStack(this.wrongMoves, moveStr);
+                // If stack becomes empty, we are back on track!
+            } 
+            // 2. Check Partial Move Progress
+            else if (this.partialMove) {
+                const combined = simplifyMoveStack([this.partialMove], moveStr);
+                
+                if (combined.length === 0) {
+                    // Cancelled (e.g. R then R')
+                    this.partialMove = null;
+                } else if (combined.length === 1) {
+                    const res = combined[0];
+                    if (res === this.scrambleMoves[this.progressIndex]) {
+                         // Completed the double move!
+                         this.progressIndex++;
+                         this.partialMove = null;
+                    } else {
+                         // Still partial? 
+                         // Only if it's a valid partial for the target.
+                         // e.g. Target R2. We had R. User did R2. Result R'. 
+                         // R' is valid partial for R2.
+                         // But simplifyMoveStack might return R'.
+                         
+                         // Check if 'res' is a valid partial for target
+                         const target = this.scrambleMoves[this.progressIndex];
+                         if (target.includes("2") && res[0] === target[0] && !res.includes("2")) {
+                             this.partialMove = res;
+                         } else {
+                             // Wrong!
+                             this.wrongMoves = combined;
+                             this.partialMove = null;
+                         }
+                    }
+                } else {
+                    // Became multiple moves (e.g. R then U) -> Wrong
+                    this.wrongMoves = combined;
+                    this.partialMove = null;
+                }
+            }
+            // 3. Check New Move Progress
+            else {
+                if (this.progressIndex < this.scrambleMoves.length) {
+                    const expected = this.scrambleMoves[this.progressIndex];
+                    
+                    if (moveStr === expected) {
+                        // Exact match
+                        this.progressIndex++;
+                    } else if (expected.includes("2") && moveStr[0] === expected[0] && !moveStr.includes("2")) {
+                        // Partial match (e.g. R for R2)
+                        this.partialMove = moveStr;
+                    } else {
+                        // Wrong move
+                        this.wrongMoves.push(moveStr);
+                    }
+                } else {
+                    // Scramble done, extra move
+                    this.wrongMoves.push(moveStr);
+                }
             }
             
             this.emit('scramble_progress', {
-                wrongMoves: this.wrongMoveCount,
-                remainingMoves: this.expectedMoveSequence.length,
-                isComplete: this.expectedMoveSequence.length === 0
+                movesDone: this.progressIndex,
+                wrongMoves: this.wrongMoves,
+                isComplete: this.progressIndex === this.scrambleMoves.length && this.wrongMoves.length === 0 && !this.partialMove
             });
         }
 

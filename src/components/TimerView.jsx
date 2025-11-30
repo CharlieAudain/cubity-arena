@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Trophy, Swords, RotateCcw, Grid2x2, Box, Grid3x3, Activity, Unplug } from 'lucide-react';
-import { generateScramble, getDailySeed, getSolvedState, getInverseMove, simplifyMoveStack } from '../utils/cube';
+import { generateScramble, getDailySeed, getSolvedState, getInverseMove, simplifyMoveStack, SOLVED_FACELETS } from '../utils/cube';
 import { calculateAverage } from '../utils/stats';
 import SmartCube3D from './SmartCube3D';
 import DebugOverlay from './DebugOverlay';
@@ -42,9 +42,11 @@ const TimerView = ({
 
   // Scramble Tracking
   // Scramble Tracking
-  const [wrongMoves, setWrongMoves] = useState(0);
+  const [movesDone, setMovesDone] = useState(0);
+  const [wrongMoves, setWrongMoves] = useState([]);
   const [scrambleLost, setScrambleLost] = useState(false);
   const [scrambleComplete, setScrambleComplete] = useState(false);
+  const [showSolvePrompt, setShowSolvePrompt] = useState(false);
   
   // Activity Feed
   const [activityLog, setActivityLog] = useState([]);
@@ -211,15 +213,38 @@ const TimerView = ({
   // Callback from SmartCube3D when solved
   const handleSolved = useCallback(() => {
       console.log(`[TimerView] handleSolved called. TimerState: ${timerState}`);
+      
+      // Always clear lost scramble state if solved
+      if (scrambleLost || wrongMoves.length > 0) {
+          setScrambleLost(false);
+          setWrongMoves([]);
+          setMovesDone(0);
+          
+          // Reset LogicalCube tracking
+          LogicalCube.getInstance().then(engine => {
+              if (engine.resetScrambleTracking) {
+                  engine.resetScrambleTracking();
+              }
+          });
+      }
+
       if (timerState === 'RUNNING') {
           console.log("🎉 CUBE SOLVED (via TwistyPlayer)! Stopping timer...");
           stopTimer();
       } else {
           console.warn(`[TimerView] Solved event ignored because timer is not RUNNING (State: ${timerState})`);
       }
-  }, [timerState, stopTimer]);
+  }, [timerState, stopTimer, scrambleLost, wrongMoves.length]);
 
   const resetTimer = () => {
+      // If connected, ensure cube is solved before getting new scramble
+      if (smartCube && smartCube.isConnected && smartCube.facelets && smartCube.facelets !== SOLVED_FACELETS) {
+          setShowSolvePrompt(true);
+          // Auto-hide after 3s
+          setTimeout(() => setShowSolvePrompt(false), 3000);
+          return;
+      }
+
   setTimerState('IDLE');
   setTime(0);
   setSolutionMoves([]); // Reset solution tracking
@@ -383,7 +408,8 @@ const TimerView = ({
 
   useEffect(() => {
       if (scramble) {
-          setWrongMoves(0);
+          setMovesDone(0);
+          setWrongMoves([]);
           setScrambleLost(false);
           setScrambleComplete(false);
           
@@ -397,11 +423,12 @@ const TimerView = ({
   // Track Scramble Progress
   // Track Scramble Progress via LogicalCube Events
   useEffect(() => {
-      const handleProgress = ({ wrongMoves, isComplete }) => {
+      const handleProgress = ({ movesDone, wrongMoves, isComplete }) => {
+          setMovesDone(movesDone);
           setWrongMoves(wrongMoves);
           setScrambleComplete(isComplete);
           
-          if (wrongMoves > 6) {
+          if (wrongMoves.length > 6) {
               setScrambleLost(true);
           } else {
               setScrambleLost(false);
@@ -432,21 +459,37 @@ const TimerView = ({
           );
       }
 
+      const moves = scramble.split(/\s+/).filter(m => m);
+      const done = moves.slice(0, movesDone);
+      const remaining = moves.slice(movesDone);
+      
+      // Calculate Correction Moves (Inverse of wrong moves, reversed)
+      const rawCorrections = [...wrongMoves].reverse().map(m => getInverseMove(m));
+      // Compress corrections (e.g. U U -> U2)
+      const corrections = rawCorrections.reduce((acc, move) => simplifyMoveStack(acc, move), []);
+
       return (
           <div className="flex flex-wrap justify-center gap-x-3 gap-y-2 items-center">
-              {/* Wrong Move Indicator */}
-              {wrongMoves > 0 && (
-                  <div className="flex gap-1 mr-4 animate-pulse">
-                      {Array.from({ length: wrongMoves }).map((_, i) => (
-                          <span key={i} className="text-red-500 text-2xl">❌</span>
-                      ))}
-                  </div>
-              )}
+              {/* Done Moves (Green) */}
+              {done.map((move, i) => (
+                  <span key={`done-${i}`} className="font-mono text-green-500/50 scale-90 transition-all duration-200">
+                      {move}
+                  </span>
+              ))}
 
-              {/* Scramble Text */}
-              <span className={`font-mono text-slate-300 ${wrongMoves > 0 ? 'opacity-50' : 'opacity-100'}`}>
-                  {scramble}
-              </span>
+              {/* Correction Moves (Red) */}
+              {corrections.map((move, i) => (
+                  <span key={`corr-${i}`} className="font-mono text-red-500 font-bold scale-110 mx-1 transition-all duration-200 animate-pulse">
+                      {move}
+                  </span>
+              ))}
+
+              {/* Remaining Moves (Grey) */}
+              {remaining.map((move, i) => (
+                  <span key={`rem-${i}`} className={`font-mono text-slate-300 transition-all duration-200 ${i === 0 && corrections.length === 0 ? 'text-blue-400 font-bold scale-125 mx-2' : ''}`}>
+                      {move}
+                  </span>
+              ))}
           </div>
       );
   };
@@ -482,9 +525,17 @@ const TimerView = ({
                   
                   // Reset UI state
                   setSyncTrigger(prev => prev + 1);
-                  setScrambleIndex(0);
-                  setCorrectionStack([]);
-                  setPartialMove(null);
+                  setMovesDone(0);
+                  setWrongMoves([]);
+                  setScrambleLost(false);
+                  setScrambleComplete(false);
+                  
+                  // Reset LogicalCube tracking
+                  LogicalCube.getInstance().then(engine => {
+                      if (engine.resetScrambleTracking) {
+                          engine.resetScrambleTracking();
+                      }
+                  });
               }} className="text-xs font-bold px-6 py-2 rounded-full border border-green-500/20 bg-green-500/10 text-green-400 hover:bg-green-500/20 transition-colors flex items-center gap-2">
                   <RotateCcw className="w-3 h-3" /> Mark as Solved
               </button>
@@ -497,6 +548,14 @@ const TimerView = ({
             <div className="absolute top-[-60px] left-1/2 transform -translate-x-1/2 bg-blue-600 text-white px-4 py-2 rounded-lg shadow-xl text-xs font-bold whitespace-nowrap z-50 flex items-center gap-3 animate-in fade-in slide-in-from-bottom-2">
                 <span>Please ensure your physical cube is solved to sync.</span>
                 <button onClick={() => setShowSyncPrompt(false)} className="bg-white/20 hover:bg-white/30 rounded px-2 py-0.5">OK</button>
+            </div>
+        )}
+
+        {/* Solve Prompt */}
+        {showSolvePrompt && (
+            <div className="absolute top-[-60px] left-1/2 transform -translate-x-1/2 bg-orange-600 text-white px-4 py-2 rounded-lg shadow-xl text-xs font-bold whitespace-nowrap z-50 flex items-center gap-3 animate-in fade-in slide-in-from-bottom-2">
+                <span>Please solve the cube to get a new scramble.</span>
+                <button onClick={() => setShowSolvePrompt(false)} className="bg-white/20 hover:bg-white/30 rounded px-2 py-0.5">OK</button>
             </div>
         )}
 

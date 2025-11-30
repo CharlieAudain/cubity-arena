@@ -31,12 +31,14 @@ const db = getFirestore(firebaseApp);
 const ALLOWED_ORIGINS = process.env.NODE_ENV === 'production' 
     ? [
         'https://cubity-arena.vercel.app',
-        'https://cubity.gg'
+   
       ]
     : [
         'http://localhost:5175',
         'http://localhost:3000',
-        'http://localhost:5173'
+        'http://localhost:5173',
+        "https://cubity.app",       // <--- NEW
+  "https://www.cubity.app"    // <--- NEW
       ];
 
 // Express CORS middleware
