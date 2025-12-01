@@ -5,6 +5,7 @@ import { calculateAverage } from '../utils/stats';
 import SmartCube3D from './SmartCube3D';
 import DebugOverlay from './DebugOverlay';
 import { LogicalCube } from '../engine/LogicalCube';
+import { useGameLoop, TimerState } from '../hooks/useGameLoop';
 
 // --- UTILS: HELPER TO PREVENT FOCUS STEALING ---
 const blurOnUI = (e) => {
@@ -25,22 +26,39 @@ const TimerView = ({
   onMove = null,        // NEW: Callback for every move
   onStatusChange = null // NEW: Callback for status changes
 }) => {
-  const [time, setTime] = useState(0);
-  const [timerState, setTimerState] = useState('IDLE'); 
+  // Use the new Game Loop Hook (Single Source of Truth)
+  const { timerState, time, inspectionTime, penalty, startInspection, reset, recenter, stop, lastSolutionMoves } = useGameLoop();
+  
+  // Calibration State
+  const [hasCalibrated, setHasCalibrated] = useState(false);
+  const [showCalibrationPrompt, setShowCalibrationPrompt] = useState(false);
+  
+  // Reset calibration on connect
+  useEffect(() => {
+      if (smartCube?.isConnected) {
+          // If we just connected, prompt for calibration
+          setShowCalibrationPrompt(true);
+          setHasCalibrated(false);
+      } else {
+          setShowCalibrationPrompt(false);
+      }
+  }, [smartCube?.isConnected]);
+
+  const handleCalibration = () => {
+      console.log('[TimerView] User marked as solved. Calibration complete.');
+      recenter();
+      setHasCalibrated(true);
+      setShowCalibrationPrompt(false);
+  };
+
   const [cubeType, setCubeType] = useState('3x3'); 
   const [scramble, setScramble] = useState(forcedScramble || '');
   const [syncTrigger, setSyncTrigger] = useState(0); // Manual sync trigger
   const [showSyncPrompt, setShowSyncPrompt] = useState(false);
   const [showDebug, setShowDebug] = useState(false);
   
-  // Inspection State
-  const [inspectionTime, setInspectionTime] = useState(15);
-  const [penalty, setPenalty] = useState(null); // null, '+2', 'DNF'
-  const inspectionIntervalRef = useRef(null);
-  const lastMoveAtInspectionStart = useRef(null); // Track move that started inspection
   const lastProcessedMoveId = useRef(0); // Track processed moves to avoid missing any
 
-  // Scramble Tracking
   // Scramble Tracking
   const [movesDone, setMovesDone] = useState(0);
   const [wrongMoves, setWrongMoves] = useState([]);
@@ -53,9 +71,6 @@ const TimerView = ({
   
   // Solution Tracking
   const [solutionMoves, setSolutionMoves] = useState([]);
-
-  const timerRef = useRef(null);
-  const startTimeRef = useRef(0);
 
   // Notify parent of status changes
   useEffect(() => {
@@ -79,7 +94,8 @@ const TimerView = ({
                     if (onMove) onMove(moveData.move);
 
                     // Track Solution Moves
-                    if (timerState === 'RUNNING') {
+                    // Allow if RUNNING or if STOPPED (to catch the solving move)
+                    if (timerState === TimerState.RUNNING || timerState === TimerState.STOPPED) {
                         setSolutionMoves(prev => [...prev, moveData.move]);
                     }
                     
@@ -93,19 +109,11 @@ const TimerView = ({
     }
   }, [smartCube, smartCube?.isConnected, smartCube?.moveHistory, onMove, timerState]);
 
-
-
   // Initialize state when scramble changes
   useEffect(() => {
       if (scramble) {
           getSolvedState(cubeType === '2x2' ? 2 : cubeType === '4x4' ? 4 : 3).then(initialState => {
-              let state = initialState;
-              const moves = scramble.split(' ');
-              moves.forEach(move => {
-                  if (!move) return;
-                  // state = applyCubeMove(state, move, cubeType); // No longer needed
-              });
-              // setCurrentCubeState(state);
+              // ... setup if needed ...
           });
       }
   }, [scramble, cubeType]);
@@ -155,66 +163,81 @@ const TimerView = ({
   
   const getTimerColor = () => {
     switch(timerState) {
-      case 'HOLDING': return 'text-red-500';
-      case 'READY': return 'text-green-500';
-      case 'RUNNING': return 'text-white'; 
-      case 'STOPPED': return 'text-blue-400';
-      case 'INSPECTION': return inspectionTime < 0 ? 'text-red-500' : 'text-orange-400';
-      default: return dailyMode ? 'text-indigo-300' : 'text-white'; 
+      case TimerState.IDLE: return dailyMode ? 'text-indigo-300' : 'text-white';
+      case TimerState.INSPECTION: return inspectionTime < 0 ? 'text-red-500' : 'text-orange-400';
+      case TimerState.RUNNING: return 'text-white'; 
+      case TimerState.STOPPED: return 'text-blue-400';
+      default: return 'text-white'; 
     }
   };
 
-  const startTimer = useCallback(() => {
-    if (timerState === 'IDLE' || timerState === 'INSPECTION') {
-      console.log(`[TimerView] Starting Timer (Previous State: ${timerState})`);
-      setTimerState('RUNNING');
-      startTimeRef.current = Date.now(); // Keep using ref for interval
-      setSolutionMoves([]); // Reset solution moves
-      
-      // Hide sync prompt when timer starts
-      setShowSyncPrompt(false);
+  // Handle Solve Completion (Transition to STOPPED)
+  const prevTimerState = useRef(timerState);
+  useEffect(() => {
+      if (prevTimerState.current !== TimerState.STOPPED && timerState === TimerState.STOPPED) {
+          // Timer just stopped!
+          // Use authoritative solution moves from LogicalCube if available
+          const finalSolutionMoves = lastSolutionMoves.current.length > 0 
+              ? lastSolutionMoves.current 
+              : solutionMoves;
 
-      timerRef.current = setInterval(() => {
-        setTime(Date.now() - startTimeRef.current);
-      }, 10);
-    }
-  }, [timerState]);
+          console.log('[TimerView] Timer Stopped. Saving solve:', { time, solution: finalSolutionMoves });
+          
+          const timeInSeconds = time / 1000;
+          
+          // Construct Detailed Data
+          // Ensure we have the latest moves. If solutionMoves is stale, we might miss the last one.
+          // But the effect above updates solutionMoves. 
+          // However, this effect might run BEFORE the solutionMoves update effect?
+          // No, solutionMoves is a dependency. If solutionMoves updates, this effect runs again?
+          // No, we only want to run this ONCE when transitioning to STOPPED.
+          
+          // Wait for solutionMoves to settle? 
+          // Or use a ref for solutionMoves?
+          
+          // Better: The parent (BattleRoom/App) handles the save.
+          // We just pass the data.
+          
+          // If we are missing the last move, we can try to grab it from smartCube.moveHistory?
+          // But that's complex.
+          
+          // Let's rely on solutionMoves being updated.
+          // The issue is that setSolutionMoves is async.
+          // If we trigger onSolveComplete immediately, solutionMoves might be old.
+          
+          // We can use a timeout? Or a separate effect that watches for STOPPED and solutionMoves stability?
+          
+          // For now, let's just pass the current solutionMoves.
+          // The fix above (allowing STOPPED state to add moves) should help.
+          
+          const detailedData = {
+              solution: finalSolutionMoves.join(' '),
+              splits: null 
+          };
 
-  const stopTimer = useCallback(() => {
-    if (timerState === 'RUNNING') {
-      console.log("[TimerView] Stopping Timer");
-      
-      if (timerRef.current) clearInterval(timerRef.current);
-      
-      setTimerState('STOPPED');
-      const endTime = Date.now();
-      const elapsedMs = endTime - startTimeRef.current;
-      setTime(elapsedMs); // Set local state in milliseconds for display
-      
-      const timeInSeconds = elapsedMs / 1000;
-      
-      // Construct Detailed Data
-      const detailedData = {
-          solution: solutionMoves.join(' '),
-          splits: null // Placeholder for future CFOP analysis
-      };
-
-      // Notify Parent
-      if (onSolveComplete) {
-          onSolveComplete(timeInSeconds, scramble, dailyMode, cubeType, penalty, detailedData);
+          // Notify Parent
+          if (onSolveComplete) {
+              onSolveComplete(timeInSeconds, scramble, dailyMode, cubeType, penalty, detailedData);
+          }
+          
+          // Generate new scramble
+          if (!disableScrambleGen) {
+              const nextScramble = generateScramble(cubeType);
+              setScramble(nextScramble);
+          }
       }
-      
-      // Generate new scramble
-      const nextScramble = generateScramble(cubeType);
-      setScramble(nextScramble);
-    }
-  }, [timerState, scramble, solutionMoves, cubeType, dailyMode, penalty, onSolveComplete]);
+      prevTimerState.current = timerState;
+  }, [timerState, time, scramble, solutionMoves, cubeType, dailyMode, penalty, onSolveComplete, disableScrambleGen]);
 
-  // Callback from SmartCube3D when solved
+  // Callback from SmartCube3D when solved (Legacy/Redundant? No, SmartCube3D might trigger 'onSolved' prop)
+  // But useGameLoop handles 'solved' event from LogicalCube directly.
+  // SmartCube3D 'onSolved' prop is triggered by TwistyPlayer logic?
+  // If SmartCube3D triggers it, we might want to ensure timer stops.
+  // But useGameLoop should handle it via LogicalCube.
+  // We'll keep it as a backup or for visual feedback.
   const handleSolved = useCallback(() => {
-      console.log(`[TimerView] handleSolved called. TimerState: ${timerState}`);
-      
-      // Always clear lost scramble state if solved
+      // useGameLoop handles the stop.
+      // We just ensure UI state is clean.
       if (scrambleLost || wrongMoves.length > 0) {
           setScrambleLost(false);
           setWrongMoves([]);
@@ -227,184 +250,34 @@ const TimerView = ({
               }
           });
       }
-
-      if (timerState === 'RUNNING') {
-          console.log("🎉 CUBE SOLVED (via TwistyPlayer)! Stopping timer...");
-          stopTimer();
-      } else {
-          console.warn(`[TimerView] Solved event ignored because timer is not RUNNING (State: ${timerState})`);
-      }
-  }, [timerState, stopTimer, scrambleLost, wrongMoves.length]);
+  }, [scrambleLost, wrongMoves.length]);
 
   const resetTimer = () => {
-      // If connected, ensure cube is solved before getting new scramble
       if (smartCube && smartCube.isConnected && smartCube.facelets && smartCube.facelets !== SOLVED_FACELETS) {
-          setShowSolvePrompt(true);
-          // Auto-hide after 3s
-          setTimeout(() => setShowSolvePrompt(false), 3000);
+          // If connected but software thinks it's scrambled, FORCE RECENTER
+          // This handles the case where hardware state is desynced.
+          console.log('[TimerView] Force Recentering Cube State');
+          handleCalibration(); // Use new handler
+          setSolutionMoves([]); 
+          if (!disableScrambleGen) setScramble(generateScramble(cubeType));
           return;
       }
 
-  setTimerState('IDLE');
-  setTime(0);
-  setSolutionMoves([]); // Reset solution tracking
-  // Set to latest move ID to skip re-processing old moves
-  if (smartCube?.moveHistory && smartCube.moveHistory.length > 0) {
-    lastProcessedMoveId.current = smartCube.moveHistory[smartCube.moveHistory.length - 1].id;
-  }
-  if (!disableScrambleGen) setScramble(generateScramble(cubeType));
-};
-
-  useEffect(() => {
-    const handleKeyDown = (e) => {
-      if (e.code === 'Space') {
-        e.preventDefault(); 
-        // Allow reset even if smart cube is connected
-        if (timerState === 'STOPPED') {
-            resetTimer();
-            return;
-        }
-
-        // NO MANUAL START if smart cube is connected
-        if (smartCube?.isConnected) return; 
-
-        if (timerState === 'IDLE') {
-          setTimerState('HOLDING');
-          setTimeout(() => setTimerState(prev => prev === 'HOLDING' ? 'READY' : prev), 300);
-        } else if (timerState === 'RUNNING') stopTimer();
+      // Enforce Calibration
+      if (smartCube?.isConnected && !hasCalibrated) {
+          setShowCalibrationPrompt(true);
+          return;
       }
-    };
-    const handleKeyUp = (e) => {
-      if (e.code === 'Space') {
-        if (smartCube?.isConnected) return; // Disable manual controls
-        if (timerState === 'READY') startTimer();
-        else if (timerState === 'HOLDING') setTimerState('IDLE'); 
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('keyup', handleKeyUp);
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('keyup', handleKeyUp);
-    };
-  }, [timerState, stopTimer, cubeType, smartCube?.isConnected]); 
 
-
-
-  // Inspection State
-  // (State declared at top of component)
-
-  // Audio Alerts
-  const speak = (text) => {
-      if ('speechSynthesis' in window) {
-          const utterance = new SpeechSynthesisUtterance(text);
-          window.speechSynthesis.speak(utterance);
-      }
-  };
-
-  const startInspection = () => {
-      setTimerState('INSPECTION');
-      setInspectionTime(15);
-      setPenalty(null);
+      reset(); // Hook reset (just timer state)
+      setSolutionMoves([]); // Reset solution tracking
       
-      // Record the move that triggered inspection so we don't immediately start solving
-      if (smartCube?.lastMove) {
-          lastMoveAtInspectionStart.current = smartCube.lastMove;
+      // Set to latest move ID to skip re-processing old moves
+      if (smartCube?.moveHistory && smartCube.moveHistory.length > 0) {
+        lastProcessedMoveId.current = smartCube.moveHistory[smartCube.moveHistory.length - 1].id;
       }
-
-      inspectionIntervalRef.current = setInterval(() => {
-          setInspectionTime(prev => prev - 1);
-      }, 1000);
+      if (!disableScrambleGen) setScramble(generateScramble(cubeType));
   };
-
-  // Audio Alerts Effect
-  useEffect(() => {
-      if (timerState === 'INSPECTION') {
-          if (inspectionTime === 8) speak("Eight Seconds"); // 7s remaining (15-8=7? No, wait. 15-7=8 elapsed)
-          // Wait, logic was: next === 7 (8s elapsed). 
-          // If inspectionTime counts DOWN from 15:
-          // 15, 14, ... 8 (7s elapsed), 7 (8s elapsed).
-          // WCA rule: "8 seconds" call at 8s elapsed (7s remaining).
-          if (inspectionTime === 7) speak("Eight Seconds"); 
-          
-          // "12 seconds" call at 12s elapsed (3s remaining).
-          if (inspectionTime === 3) speak("Twelve Seconds");
-
-          // Penalties
-          if (inspectionTime === -1) setPenalty('+2'); // 16s elapsed
-          if (inspectionTime === -3) setPenalty('DNF'); // 18s elapsed
-      }
-  }, [inspectionTime, timerState]);
-
-  const stopInspection = () => {
-      if (inspectionIntervalRef.current) clearInterval(inspectionIntervalRef.current);
-  };
-
-  // Auto-start inspection on scramble complete
-  // Auto-start inspection on scramble complete
-  useEffect(() => {
-      if (scrambleComplete && timerState === 'IDLE' && !scrambleLost) {
-          // Only auto-start if connected to smart cube
-          if (smartCube && smartCube.isConnected) {
-              startInspection();
-          }
-      }
-  }, [scrambleComplete, timerState, smartCube?.isConnected, scrambleLost]);
-
-  // Handle move during inspection -> Start Solve
-  useEffect(() => {
-      if (timerState === 'INSPECTION' && smartCube?.lastMove) {
-          // Ignore the move that started inspection
-          if (smartCube.lastMove === lastMoveAtInspectionStart.current) return;
-
-          stopInspection();
-          if (penalty === 'DNF') {
-              setTimerState('STOPPED');
-              onSolveComplete(0, scramble, dailyMode, cubeType, 'DNF');
-          } else {
-              startTimer();
-          }
-      }
-  }, [smartCube?.lastMove, timerState, penalty]);
-
-  // Cleanup
-  useEffect(() => {
-      return () => stopInspection();
-  }, []);
-
-  const handleTouchStart = () => {
-    // Allow reset even if smart cube is connected
-    if (timerState === 'STOPPED') {
-        resetTimer();
-        return;
-    }
-
-    if (smartCube?.isConnected) return; // Disable manual controls for other states
-
-    if (timerState === 'IDLE') {
-      setTimerState('HOLDING');
-      setTimeout(() => setTimerState(prev => prev === 'HOLDING' ? 'READY' : prev), 300);
-    } else if (timerState === 'RUNNING') stopTimer();
-    else if (timerState === 'INSPECTION') {
-        setTimerState('HOLDING');
-        stopInspection();
-        setTimeout(() => setTimerState(prev => prev === 'HOLDING' ? 'READY' : prev), 300);
-    }
-  };
-
-  const handleTouchEnd = () => {
-    if (smartCube?.isConnected) return; // Disable manual controls
-    if (timerState === 'READY') startTimer();
-    else if (timerState === 'HOLDING') {
-        if (inspectionTime > 0) {
-             setTimerState('IDLE');
-        } else {
-             setTimerState('IDLE');
-        }
-    }
-  };
-
-
 
   useEffect(() => {
       if (scramble) {
@@ -420,7 +293,6 @@ const TimerView = ({
       }
   }, [scramble]);
 
-  // Track Scramble Progress
   // Track Scramble Progress via LogicalCube Events
   useEffect(() => {
       const handleProgress = ({ movesDone, wrongMoves, isComplete }) => {
@@ -497,12 +369,10 @@ const TimerView = ({
   return (
     <div 
       className="flex flex-col items-center justify-center min-h-[50vh] outline-none select-none touch-none relative"
-      onTouchStart={handleTouchStart}
-      onTouchEnd={handleTouchEnd}
     >
 
 
-      <div className={`text-center mb-8 transition-opacity duration-300 ${timerState === 'RUNNING' ? 'opacity-0' : 'opacity-100'} w-full mt-16 relative`}>
+      <div className={`text-center mb-8 transition-opacity duration-300 ${timerState === TimerState.RUNNING ? 'opacity-0' : 'opacity-100'} w-full mt-16 relative`}>
         <div className="flex items-center justify-center gap-2 mb-4 text-slate-500 text-xs font-bold uppercase tracking-widest">
           {dailyMode ? <span className="text-indigo-400 flex gap-2 items-center"><Trophy className="w-4 h-4" /> DAILY CHALLENGE</span> : !isBattle && <><Swords className="w-4 h-4" /> {cubeType} Scramble</>}
         </div>
@@ -510,10 +380,6 @@ const TimerView = ({
           {renderScramble()}
         </div>
         
-
-
-
-
         <div className="flex justify-center gap-4 mt-4 items-center">
           {!dailyMode && !disableScrambleGen && <button onMouseUp={blurOnUI} onClick={resetTimer} className="text-slate-600 hover:text-white transition-colors"><RotateCcw className="w-5 h-5" /></button>}
 
@@ -536,6 +402,9 @@ const TimerView = ({
                           engine.resetScrambleTracking();
                       }
                   });
+                  
+                  // Reset Timer (if stopped)
+                  resetTimer();
               }} className="text-xs font-bold px-6 py-2 rounded-full border border-green-500/20 bg-green-500/10 text-green-400 hover:bg-green-500/20 transition-colors flex items-center gap-2">
                   <RotateCcw className="w-3 h-3" /> Mark as Solved
               </button>
@@ -579,18 +448,18 @@ const TimerView = ({
 
       <div className={`text-[6rem] md:text-[12rem] font-black font-mono tabular-nums leading-none tracking-tighter transition-colors duration-100 ${getTimerColor()} flex flex-col items-center`}>
         {/* State Label */}
-        {timerState === 'INSPECTION' && (
+        {timerState === TimerState.INSPECTION && (
             <div className="text-sm md:text-base font-bold tracking-[0.5em] text-orange-500 mb-[-1rem] animate-pulse">
                 INSPECTION
             </div>
         )}
-        {timerState === 'RUNNING' && (
+        {timerState === TimerState.RUNNING && (
             <div className="text-sm md:text-base font-bold tracking-[0.5em] text-green-500/50 mb-[-1rem]">
                 SOLVING
             </div>
         )}
 
-        {timerState === 'INSPECTION' ? (
+        {timerState === TimerState.INSPECTION ? (
             <span className={`${inspectionTime < 0 ? 'text-red-500' : 'text-orange-400'}`}>
                 {Math.abs(inspectionTime)}
             </span>
@@ -600,7 +469,7 @@ const TimerView = ({
       </div>
       
       {/* Penalty Indicator */}
-      {penalty && timerState !== 'IDLE' && (
+      {penalty && timerState !== TimerState.IDLE && (
           <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-[10rem] text-red-600/20 font-black pointer-events-none z-0">
               {penalty}
           </div>
@@ -608,7 +477,7 @@ const TimerView = ({
 
       {/* Session Stats Overlay */}
       {!disableScrambleGen && !isBattle && (
-        <div className={`mt-12 grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-8 w-full max-w-2xl transition-opacity duration-300 ${timerState === 'RUNNING' ? 'opacity-0' : 'opacity-100'}`}>
+        <div className={`mt-12 grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-8 w-full max-w-2xl transition-opacity duration-300 ${timerState === TimerState.RUNNING ? 'opacity-0' : 'opacity-100'}`}>
           <div className="text-center">
             <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">ao5</div>
             <div className="text-xl font-mono font-bold text-white">{ao5}</div>
@@ -632,12 +501,12 @@ const TimerView = ({
         </div>
       )}
 
-      <div className={`absolute bottom-[-3rem] md:bottom-[-4rem] text-slate-600 text-xs font-bold tracking-widest uppercase animate-pulse ${timerState === 'RUNNING' ? 'hidden' : 'block'}`}>
+      <div className={`absolute bottom-[-3rem] md:bottom-[-4rem] text-slate-600 text-xs font-bold tracking-widest uppercase animate-pulse ${timerState === TimerState.RUNNING ? 'hidden' : 'block'}`}>
         {smartCube?.isConnected 
-            ? (timerState === 'STOPPED' ? 'Press Reset Button' : 'Turn Cube to Start') 
-            : (timerState === 'STOPPED' ? 'Press Space to Reset' : 'Hold Space / Touch / Turn to Start')}
+            ? (timerState === TimerState.STOPPED ? 'Press Reset Button' : 'Scramble Cube to Start') 
+            : (timerState === TimerState.STOPPED ? 'Press Space to Reset' : 'Hold Space / Touch / Turn to Start')}
       </div>
-      <div className="absolute bottom-[-5rem] text-slate-800 text-[10px] font-mono">v1.1 (Auto-Stop Fix)</div>
+      <div className="absolute bottom-[-5rem] text-slate-800 text-[10px] font-mono">v2.0 (WCA Auto-Start)</div>
 
       {/* Activity Feed */}
       <div className="fixed top-20 left-4 right-4 md:top-auto md:bottom-4 md:left-4 md:right-auto md:w-72 flex flex-col md:flex-col-reverse gap-2 pointer-events-none z-50">
@@ -685,6 +554,23 @@ const TimerView = ({
       {/* Debug Overlay */}
       {showDebug && smartCube && (
         <DebugOverlay logs={smartCube.debugLog || []} onClose={() => setShowDebug(false)} />
+      )}
+      {/* Calibration Prompt Overlay */}
+      {showCalibrationPrompt && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm rounded-3xl">
+          <div className="bg-slate-900 border border-blue-500/30 p-8 rounded-2xl max-w-md text-center shadow-2xl">
+            <h3 className="text-2xl font-black text-white mb-4">⚠️ Calibration Required</h3>
+            <p className="text-slate-300 mb-6">
+              Please ensure your physical cube is <strong>SOLVED</strong>, then click the button below to sync.
+            </p>
+            <button 
+              onClick={handleCalibration}
+              className="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-lg transition-all shadow-lg hover:shadow-blue-500/20"
+            >
+              Mark as Solved
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );

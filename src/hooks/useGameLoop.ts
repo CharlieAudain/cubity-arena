@@ -1,36 +1,81 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { LogicalCube } from '../engine/LogicalCube';
 
 export enum TimerState {
-    IDLE = 0,
-    INSPECTION = 1,
-    READY = 2,
-    RUNNING = 3,
-    STOPPED = 4,
-    FINISHED = 5
+    IDLE = 'IDLE',
+    INSPECTION = 'INSPECTION',
+    RUNNING = 'RUNNING',
+    STOPPED = 'STOPPED'
 }
 
 interface GameLoopResult {
     timerState: TimerState;
     time: number;
+    inspectionTime: number;
+    penalty: string | null;
     startInspection: () => void;
     reset: () => void;
+    recenter: () => void;
+    stop: (timestamp?: number, solutionMoves?: string[]) => void;
+    lastSolutionMoves: React.MutableRefObject<string[]>;
 }
 
 /**
  * useGameLoop Hook
  * 
- * Implements the Hardware-Controlled Timer logic.
- * - Starts timer on first move (if READY/INSPECTION).
- * - Stops timer on solve (if RUNNING).
+ * Single Source of Truth for the Timer Logic.
+ * - Auto-starts Inspection when scramble is complete.
+ * - Counts down Inspection (15s) with WCA penalties.
+ * - Starts Timer on first hardware move during Inspection.
+ * - Stops Timer on hardware solve.
  */
-export function useGameLoop(isScrambleValid: boolean): GameLoopResult {
+export function useGameLoop(): GameLoopResult {
     const [timerState, setTimerState] = useState<TimerState>(TimerState.IDLE);
     const [time, setTime] = useState(0);
+    const [inspectionTime, setInspectionTime] = useState(15);
+    const [penalty, setPenalty] = useState<string | null>(null);
+    
     const startTimeRef = useRef<number>(0);
     const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
+    const inspectionIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-    // Timer Tick
+    // Audio Alerts (Helper)
+    const speak = (text: string) => {
+        if ('speechSynthesis' in window) {
+            const utterance = new SpeechSynthesisUtterance(text);
+            window.speechSynthesis.speak(utterance);
+        }
+    };
+
+    // Inspection Logic
+    useEffect(() => {
+        if (timerState === TimerState.INSPECTION) {
+            inspectionIntervalRef.current = setInterval(() => {
+                setInspectionTime(prev => {
+                    const next = prev - 1;
+                    // Audio Alerts
+                    if (next === 7) speak("Eight Seconds");
+                    if (next === 3) speak("Twelve Seconds");
+                    
+                    // Penalties
+                    if (next === -1) setPenalty('+2');
+                    if (next === -3) setPenalty('DNF');
+                    
+                    return next;
+                });
+            }, 1000);
+        } else {
+            if (inspectionIntervalRef.current) {
+                clearInterval(inspectionIntervalRef.current);
+                inspectionIntervalRef.current = null;
+            }
+        }
+        return () => {
+            if (inspectionIntervalRef.current) clearInterval(inspectionIntervalRef.current);
+        };
+    }, [timerState]);
+
+    // Timer Logic
     useEffect(() => {
         if (timerState === TimerState.RUNNING) {
             timerIntervalRef.current = setInterval(() => {
@@ -42,76 +87,118 @@ export function useGameLoop(isScrambleValid: boolean): GameLoopResult {
                 timerIntervalRef.current = null;
             }
         }
-        
         return () => {
             if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
         };
     }, [timerState]);
 
+    const startInspection = useCallback(() => {
+        console.log('[GameLoop] Starting Inspection');
+        setTimerState(TimerState.INSPECTION);
+        setInspectionTime(15);
+        setPenalty(null);
+    }, []);
+
+    const startTimer = useCallback((timestamp?: number) => {
+        console.log('[GameLoop] Starting Timer');
+        setTimerState(TimerState.RUNNING);
+        startTimeRef.current = timestamp || Date.now();
+    }, []);
+
+    const stopTimer = useCallback((timestamp?: number, solutionMoves?: string[]) => {
+        if (timerState !== TimerState.RUNNING && timerState !== TimerState.INSPECTION) return;
+
+        const endTime = timestamp || Date.now();
+        // If we have a start time, calculate precise delta
+        if (startTimeRef.current) {
+            const delta = endTime - startTimeRef.current;
+            setTime(delta);
+        }
+        
+        // Update ref with solution moves if provided
+        if (solutionMoves) {
+            lastSolutionMoves.current = solutionMoves;
+        }
+        
+        setTimerState(TimerState.STOPPED);
+        
+        // Return the solution data for the consumer to use
+        return { time: startTimeRef.current ? endTime - startTimeRef.current : 0, solutionMoves };
+    }, [timerState]);
+
+    const reset = useCallback(() => {
+        setTimerState(TimerState.IDLE);
+        setTime(0);
+        setInspectionTime(0);
+        setPenalty(null);
+    }, []);
+
+    const recenter = useCallback(async () => {
+        const engine = await LogicalCube.getInstance();
+        engine.recenter();
+        // Also reset timer state
+        reset();
+    }, [reset]);
+
     // Hardware Event Listeners
     useEffect(() => {
-        let engine: LogicalCube | null = null;
+        let cleanupFn: (() => void) | null = null;
+        let isMounted = true;
 
-        const handleUpdate = ({ move }: { move: string }) => {
+        const handleUpdate = ({ move, timestamp }: { move: string, timestamp?: number }) => {
             // START LATCH: First Move Start
-            // If Inspection or Ready, start the timer
-            if (timerState === TimerState.INSPECTION || timerState === TimerState.READY) {
-                // Only start if scramble is valid (Anti-Cheat)
-                if (isScrambleValid) {
-                    console.log('[GameLoop] 🟢 Timer Started by Hardware Move');
-                    startTimeRef.current = Date.now();
-                    setTimerState(TimerState.RUNNING);
-                } else {
-                    console.warn('[GameLoop] ⚠️ Move detected but Scramble Invalid. Timer not started.');
-                }
+            if (timerState === TimerState.INSPECTION) {
+                console.log('[GameLoop] Auto-Start Triggered by Move:', move);
+                startTimer(timestamp);
             }
         };
 
-        const handleSolved = () => {
+        const handleSolved = ({ timestamp, solutionMoves }: { timestamp?: number, solutionMoves?: string[] }) => {
+            console.log('[GameLoop] Solved Event Received. State:', timerState);
             // STOP LATCH: Auto-Stop on Solve
             if (timerState === TimerState.RUNNING) {
-                console.log('[GameLoop] 🏁 Timer Stopped by Hardware Solve');
-                setTimerState(TimerState.STOPPED);
-                // Final time update
-                setTime(Date.now() - startTimeRef.current);
+                stopTimer(timestamp, solutionMoves);
             }
+        };
+        
+        const handleScrambleProgress = ({ isComplete }: { isComplete: boolean }) => {
+             // Allow start if IDLE or STOPPED (after previous solve)
+             if (isComplete && (timerState === TimerState.IDLE || timerState === TimerState.STOPPED)) {
+                 console.log('[GameLoop] Scramble Complete. Starting Inspection.');
+                 startInspection();
+             }
         };
 
         const init = async () => {
-            engine = await LogicalCube.getInstance();
+            const engine = await LogicalCube.getInstance();
+            if (!isMounted) return;
+
             engine.on('update', handleUpdate);
             engine.on('solved', handleSolved);
-            engine.on('scramble_progress', ({ isComplete }) => {
-                if (isComplete && timerState === TimerState.IDLE) {
-                    startInspection();
-                }
-            });
+            engine.on('scramble_progress', handleScrambleProgress);
+            
+            cleanupFn = () => {
+                engine.off('update', handleUpdate);
+                engine.off('solved', handleSolved);
+                engine.off('scramble_progress', handleScrambleProgress);
+            };
         };
 
         init();
 
         return () => {
-            if (engine) {
-                engine.off('update', handleUpdate);
-                engine.off('solved', handleSolved);
-            }
+            isMounted = false;
+            if (cleanupFn) cleanupFn();
         };
-    }, [timerState, isScrambleValid]);
+    }, [timerState, startInspection, startTimer, stopTimer]);
 
-    const startInspection = () => {
-        setTimerState(TimerState.INSPECTION);
-        setTime(0);
-    };
+    // Store last solution moves in a ref so it persists across renders without triggering them
+    const lastSolutionMoves = useRef<string[]>([]);
 
-    const reset = () => {
-        setTimerState(TimerState.IDLE);
-        setTime(0);
-    };
-
-    return {
-        timerState,
-        time,
-        startInspection,
-        reset
-    };
+    // Update ref when stopTimer is called (via side effect or direct call)
+    // Actually, stopTimer is called inside handleSolved. We need to capture the moves there.
+    
+    // Let's modify handleSolved to update the ref.
+    
+    return { timerState, time, inspectionTime, penalty, startInspection, reset, recenter, stop: stopTimer, lastSolutionMoves };
 }

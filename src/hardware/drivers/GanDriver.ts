@@ -51,6 +51,9 @@ export class GanDriver extends SmartDevice {
   private hasAnchored: boolean = false;
   private moveBuffer: { move: string, moveCnt: number, timestamp: number }[] = [];
   private isProcessingBuffer = false;
+  private commandQueue: (() => Promise<void>)[] = [];
+  private isWriting = false;
+  private isFetchingHistory = false;
   private moveHistory: { move: string, deviceTime: number, localTime: number }[] = [];
 
   constructor() {
@@ -382,7 +385,11 @@ export class GanDriver extends SmartDevice {
   public async markAsSolved(): Promise<void> {
       // GAN cubes don't have a direct "mark solved" command usually,
       // but we can reset internal state.
-      await this.reset();
+      // await this.reset();
+      
+      // Use LogicalCube recenter to fix desync
+      const cube = await LogicalCube.getInstance();
+      cube.recenter();
   }
 
   /**
@@ -719,6 +726,12 @@ export class GanDriver extends SmartDevice {
       if (numberOfMoves % 2 === 1) numberOfMoves++;
       numberOfMoves = Math.min(numberOfMoves, startMoveCnt + 1);
 
+      if (this.isFetchingHistory) {
+          Logger.log('GanDriver', 'History request already in progress. Skipping.');
+          return;
+      }
+      this.isFetchingHistory = true;
+
       Logger.log('GanDriver', `Requesting history: Start=${startMoveCnt}, Count=${numberOfMoves}`);
 
       const req = new Array(20).fill(0);
@@ -727,7 +740,20 @@ export class GanDriver extends SmartDevice {
       req[2] = startMoveCnt;
       req[4] = numberOfMoves;
 
-      await this.sendRequest(req);
+      try {
+          await this.sendRequest(req);
+      } catch (e) {
+          Logger.error('GanDriver', 'Failed to send history request:', e);
+          this.isFetchingHistory = false; // Reset on error
+      }
+      // Note: isFetchingHistory remains true until we receive the packet or timeout
+      // We should add a timeout to reset it.
+      setTimeout(() => {
+          if (this.isFetchingHistory) {
+              Logger.warn('GanDriver', 'History request timed out. Resetting flag.');
+              this.isFetchingHistory = false;
+          }
+      }, 1000);
   }
 
   /**
@@ -740,6 +766,8 @@ export class GanDriver extends SmartDevice {
       const numberOfMoves = (len - 1) * 2;
       
       Logger.log('GanDriver', `Received history: Start=${startMoveCnt}, Count=${numberOfMoves}`);
+      
+      this.isFetchingHistory = false; // Request completed
 
       const allMoves: { move: string, moveCnt: number }[] = [];
 
@@ -827,8 +855,41 @@ export class GanDriver extends SmartDevice {
     if (!this.writeCharacteristic) {
       throw new Error('Write characteristic not available');
     }
-    const encoded = this.encode(req);
-    await this.writeCharacteristic.writeValue(new Uint8Array(encoded));
+    
+    // Add to queue
+    return new Promise<void>((resolve, reject) => {
+        this.commandQueue.push(async () => {
+            try {
+                const encoded = this.encode(req);
+                await this.writeCharacteristic!.writeValue(new Uint8Array(encoded));
+                resolve();
+            } catch (e) {
+                reject(e);
+            }
+        });
+        
+        this.processCommandQueue();
+    });
+  }
+
+  private async processCommandQueue() {
+      if (this.isWriting) return;
+      this.isWriting = true;
+      
+      while (this.commandQueue.length > 0) {
+          const cmd = this.commandQueue.shift();
+          if (cmd) {
+              try {
+                  await cmd();
+              } catch (e) {
+                  Logger.error('GanDriver', 'Command failed:', e);
+              }
+              // Small delay between writes to be safe
+              await new Promise(r => setTimeout(r, 20));
+          }
+      }
+      
+      this.isWriting = false;
   }
 
   /**
@@ -954,10 +1015,13 @@ export class GanDriver extends SmartDevice {
           const cube = await LogicalCube.getInstance();
 
           // Safety: If buffer gets too full (stuck), request manual reset
-          if (this.moveBuffer.length > 16) {
-              Logger.error('GanDriver', '🚨 Buffer stuck (len > 16). Requesting manual reset.');
-              this.emit('error', new Error('RESET_REQUIRED'));
-              this.moveBuffer = []; // Clear buffer to stop error spam
+          // Safety: If buffer gets too full (stuck), request manual reset
+          // Increased limit to 50 to handle bursts during history fetch
+          if (this.moveBuffer.length > 50) {
+              Logger.error('GanDriver', '🚨 Buffer stuck (len > 50). Clearing buffer and requesting facelets.');
+              // Instead of fatal error, try to recover
+              this.moveBuffer = []; 
+              this.requestFacelets(); // Re-sync
               return;
           }
 
@@ -992,7 +1056,7 @@ export class GanDriver extends SmartDevice {
                   Logger.log('GanDriver', `🟢 Applying Buffered Move: ${nextMove.move} (Cnt: ${nextMove.moveCnt})`);
                   
                   this.emit('move', { move: nextMove.move, timestamp: nextMove.timestamp, state: "", timeDelta: 0 });
-                  cube.applyMove(nextMove.move);
+                  cube.applyMove(nextMove.move, nextMove.timestamp);
               } else {
                   // Gap!
                   Logger.warn('GanDriver', `⚠️ Gap detected in buffer. Expected: ${this.prevMoveCnt + 1}, Got: ${nextMove.moveCnt} (Diff: ${diff})`);

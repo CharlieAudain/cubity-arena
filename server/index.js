@@ -6,6 +6,7 @@ import { v4 as uuidv4 } from 'uuid';
 import dotenv from 'dotenv';
 import { initializeApp } from "firebase/app";
 import { getFirestore, doc, getDoc } from "firebase/firestore";
+import admin from 'firebase-admin';
 
 // Load environment variables
 dotenv.config();
@@ -27,11 +28,27 @@ const firebaseConfig = {
 const firebaseApp = initializeApp(firebaseConfig);
 const db = getFirestore(firebaseApp);
 
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+
+// Initialize Firebase Admin
+// Load the key
+const serviceAccount = require("./service-account.json");
+
+// Initialize the Admin SDK
+if (admin.apps.length === 0) {
+  admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount)
+  });
+  console.log("🔥 Firebase Admin Initialized");
+}
+
 // CORS Configuration - Whitelist allowed origins
 const ALLOWED_ORIGINS = process.env.NODE_ENV === 'production' 
     ? [
         'https://cubity-arena.vercel.app',
-   
+        'https://cubity.app',
+        'https://www.cubity.app'
       ]
     : [
         'http://localhost:5175',
@@ -171,6 +188,38 @@ app.delete('/api/rooms/:roomId', (req, res) => {
         res.json({ success: true, message: `Room ${roomId} closed` });
     } else {
         res.status(404).json({ error: 'Room not found' });
+    }
+});
+
+// Socket.IO Middleware
+io.use(async (socket, next) => {
+    const token = socket.handshake.auth.token;
+    
+    if (!token) {
+        return next(new Error("Authentication error: No token provided"));
+    }
+
+    try {
+        // 1. Verify Token
+        const decodedToken = await admin.auth().verifyIdToken(token);
+        socket.user = decodedToken;
+
+        // 2. Check Ban Status (users collection)
+        // We use Admin SDK for this check
+        if (admin.apps.length > 0) {
+            const userDoc = await admin.firestore().collection('users').doc(decodedToken.uid).get();
+            if (userDoc.exists) {
+                const userData = userDoc.data();
+                if (userData.isBanned === true || userData.status === 'banned') {
+                     return next(new Error("Account banned"));
+                }
+            }
+        }
+        
+        next();
+    } catch (err) {
+        console.error("Socket Auth Error:", err);
+        next(new Error("Authentication error"));
     }
 });
 

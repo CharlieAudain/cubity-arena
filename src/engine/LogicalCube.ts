@@ -30,6 +30,9 @@ export class LogicalCube {
     private progressIndex: number = 0;
     private wrongMoves: string[] = [];
     private partialMove: string | null = null;
+    
+    // Solution Tracking
+    private currentSolutionMoves: string[] = [];
 
     private constructor() {
         this.rawState = new CubieCube();
@@ -75,7 +78,9 @@ export class LogicalCube {
         this.scrambleMoves = [...moves];
         this.progressIndex = 0;
         this.wrongMoves = [];
+        this.wrongMoves = [];
         this.partialMove = null;
+        this.currentSolutionMoves = []; // Reset solution tracking
         
         moves.forEach(move => {
             if (!move) return;
@@ -98,7 +103,9 @@ export class LogicalCube {
     public resetScrambleTracking() {
         this.progressIndex = 0;
         this.wrongMoves = [];
+        this.wrongMoves = [];
         this.partialMove = null;
+        this.currentSolutionMoves = []; // Reset solution tracking
         this.emit('scramble_progress', {
             movesDone: 0,
             wrongMoves: [],
@@ -127,7 +134,7 @@ export class LogicalCube {
     /**
      * Apply a move string (e.g., "R", "U'", "F2")
      */
-    public applyMove(moveStr: string) {
+    public applyMove(moveStr: string, timestamp?: number) {
         if (!moveStr) return;
 
         // VALIDATION:
@@ -207,6 +214,12 @@ export class LogicalCube {
             });
         }
 
+
+        
+        // Track Solution Move (if not part of scramble)
+        // We track ALL moves applied after scramble setup
+        this.currentSolutionMoves.push(moveStr);
+
         const moveIdx = this.getMoveIndex(moveStr);
         if (moveIdx === -1) return; 
 
@@ -220,7 +233,7 @@ export class LogicalCube {
         this.rawState = nextRaw;
 
         // 2. Emit the RELATIVE state to the UI
-        this.emitUpdate(moveStr);
+        this.emitUpdate(moveStr, timestamp);
     }
 
     /**
@@ -279,8 +292,9 @@ export class LogicalCube {
         this.rawState = newRaw;
         
         // 2. Calculate the Inverse (The Anchor)
-        // Only set anchor on FIRST connection/sync to establish orientation.
-        // Subsequent syncs should preserve the anchor to maintain relative state.
+        // DISABLED: We assume the hardware reports absolute facelets correctly.
+        // Auto-anchoring causes issues if connected while scrambled.
+        /*
         if (!this.hasAnchored) {
             this.anchorInv = new CubieCube();
             this.anchorInv.invFrom(this.rawState);
@@ -291,6 +305,8 @@ export class LogicalCube {
         } else {
             console.log('[LogicalCube] 🔄 Syncing raw state (preserving anchor).');
         }
+        */
+        console.log('[LogicalCube] 🔄 Syncing raw state (Absolute Mode).');
         
         // 3. Update UI (Emit reset to snap visualizer)
         // 3. Update UI (Emit reset to snap visualizer)
@@ -304,15 +320,54 @@ export class LogicalCube {
         this.emit('reset', { state: displayFacelets });
         
         // Check if solved immediately
-        if (displayFacelets === "UUUUUUUUURRRRRRRRRFFFFFFFFFDDDDDDDDDLLLLLLLLLBBBBBBBBB") {
+        if (this.isSolved(displayFacelets)) {
             this.emit('solved', {});
         }
     }
 
     /**
+     * Force the current state to be treated as SOLVED.
+     * Sets the anchor to the current raw state.
+     */
+    public recenter() {
+        console.log('[LogicalCube] 🎯 Recentering (Setting current state as Solved).');
+        this.anchorInv = new CubieCube();
+        this.anchorInv.invFrom(this.rawState);
+        
+        // Set anchor to Identity (Standard Orientation)
+        // This ensures the display state becomes purely the relative moves from this point.
+        this.anchor = new CubieCube(); 
+        
+        this.hasAnchored = true;
+        
+        // Emit update to snap UI
+        this.emitUpdate();
+    }
+
+    /**
+     * Check if the facelet string represents a solved cube (monochromatic faces)
+     * Handles any orientation.
+     */
+    private isSolved(facelets: string): boolean {
+        // Check each of the 6 faces (9 stickers each)
+        for (let i = 0; i < 54; i += 9) {
+            const face = facelets.slice(i, i + 9);
+            const first = face[0];
+            for (let j = 1; j < 9; j++) {
+                if (face[j] !== first) {
+                    // DEBUG: Log why it failed
+                    console.log(`[LogicalCube] Not Solved: Face ${i/9} has mixed colors: ${face}`);
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    /**
      * Emit update event with current state
      */
-    private emitUpdate(moveStr?: string) {
+    private emitUpdate(moveStr?: string, timestamp?: number) {
         // Calculate Display State: AnchorInv * RawState * Anchor (Conjugation)
         const temp = new CubieCube();
         CubieCube.CubeMult(this.anchorInv, this.rawState, temp);
@@ -321,16 +376,28 @@ export class LogicalCube {
         
         const facelets = displayState.toFaceCube();
         
+        // DEBUG: Log facelets to see why it's not matching
+        const solved = this.isSolved(facelets);
+        if (solved) {
+             console.log(`[LogicalCube] ✅ SOLVED DETECTED!`);
+        } else {
+             console.log(`[LogicalCube] State: ${facelets}`);
+        }
+        
         // Emit to listeners
         if (this.listeners['update']) {
             this.listeners['update'].forEach(listener => listener({
                 move: moveStr,
-                state: facelets
+                state: facelets,
+                timestamp: timestamp || Date.now()
             }));
         }
         // Check solved on DISPLAY state
-        if (facelets === "UUUUUUUUURRRRRRRRRFFFFFFFFFDDDDDDDDDLLLLLLLLLBBBBBBBBB") {
-            this.emit('solved', {});
+        if (solved) {
+            this.emit('solved', { 
+                timestamp: timestamp || Date.now(),
+                solutionMoves: [...this.currentSolutionMoves]
+            });
         }
     }
 

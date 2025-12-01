@@ -28,3 +28,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Reference files
+cstimer-master/
+server/service-account.json

@@ -1,4 +1,5 @@
 import { puzzles } from "cubing/puzzles";
+import { Alg } from "cubing/alg";
 
 // --- UTILS: SCRAMBLE GENERATORS ---
 
@@ -151,7 +152,12 @@ export const applyCubeMove = (state: any, move: string, type?: string): any => {
   if (!state) return null;
   
   try {
-    return state.applyAlg(move);
+    if (state.apply) {
+        const alg = new Alg(move);
+        return state.apply(alg);
+    }
+    console.warn("[cube.ts] state.apply is missing. State:", state);
+    return state;
   } catch (e: any) {
     console.error(`[cube.ts] Failed to apply move "${move}":`, e.message);
     return state;

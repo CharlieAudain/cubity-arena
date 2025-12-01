@@ -20,6 +20,7 @@ import AdminDashboard from './components/AdminDashboard';
 import UsernameSetup from './components/UsernameSetup';
 import HardwareTest from './components/HardwareTest';
 import { useHardwareDriver } from './hooks/useHardwareDriver';
+import { socket } from './hooks/useSocket';
 import { blurOnUI } from './utils/ui';
 import { Logger } from './utils/Logger';
 
@@ -42,6 +43,28 @@ export default function App() {
 
   // SMART CUBE HOOK (Singleton Driver)
   const smartCube = useHardwareDriver(userData?.savedMacAddress);
+
+  // SOCKET CONNECTION (Auth Protected)
+  useEffect(() => {
+    if (user) {
+        // Get fresh token and connect
+        user.getIdToken().then(token => {
+            socket.auth = { token };
+            if (!socket.connected) {
+                console.log("[App] Connecting socket with token...");
+                socket.connect();
+            }
+        }).catch(err => {
+            console.error("[App] Failed to get token for socket:", err);
+        });
+    } else {
+        // Disconnect if logged out
+        if (socket.connected) {
+            console.log("[App] User logged out, disconnecting socket.");
+            socket.disconnect();
+        }
+    }
+  }, [user]);
 
   useEffect(() => {
     Logger.init();
