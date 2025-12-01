@@ -1,5 +1,5 @@
-import mathlib from '../lib/cstimer/mathlib';
-import { getInverseMove, simplifyMoveStack } from '../utils/cube';
+import mathlib from '../lib/cstimer/mathlib.js';
+import { getInverseMove, simplifyMoveStack } from '../utils/cube.ts';
 
 // Extract CubieCube class and type from the default export
 const CubieCube = mathlib.CubieCube;
@@ -101,11 +101,11 @@ export class LogicalCube {
      * Reset scramble tracking state (e.g. when user solves cube to reset)
      */
     public resetScrambleTracking() {
+        this.scrambleMoves = [];
         this.progressIndex = 0;
         this.wrongMoves = [];
-        this.wrongMoves = [];
         this.partialMove = null;
-        this.currentSolutionMoves = []; // Reset solution tracking
+        this.currentSolutionMoves = [];
         this.emit('scramble_progress', {
             movesDone: 0,
             wrongMoves: [],
@@ -145,14 +145,18 @@ export class LogicalCube {
 
         // SCRAMBLE TRACKING:
         if (this.scrambleMoves.length > 0) {
+            console.log(`[LogicalCube] Scramble Track: Move=${moveStr}, Index=${this.progressIndex}, Expected=${this.scrambleMoves[this.progressIndex]}`);
+            
             // 1. Check Correction (Undo) or Wrong Move Accumulation
             if (this.wrongMoves.length > 0) {
                 this.wrongMoves = simplifyMoveStack(this.wrongMoves, moveStr);
+                console.log(`[LogicalCube]   -> Wrong Moves Stack: ${this.wrongMoves.join(' ')}`);
                 // If stack becomes empty, we are back on track!
             } 
             // 2. Check Partial Move Progress
             else if (this.partialMove) {
                 const combined = simplifyMoveStack([this.partialMove], moveStr);
+                console.log(`[LogicalCube]   -> Partial Combine: ${this.partialMove} + ${moveStr} = ${combined.join(' ')}`);
                 
                 if (combined.length === 0) {
                     // Cancelled (e.g. R then R')
@@ -163,6 +167,7 @@ export class LogicalCube {
                          // Completed the double move!
                          this.progressIndex++;
                          this.partialMove = null;
+                         console.log(`[LogicalCube]   -> Partial Completed! Next Index=${this.progressIndex}`);
                     } else {
                          // Still partial? 
                          // Only if it's a valid partial for the target.
@@ -174,16 +179,19 @@ export class LogicalCube {
                          const target = this.scrambleMoves[this.progressIndex];
                          if (target.includes("2") && res[0] === target[0] && !res.includes("2")) {
                              this.partialMove = res;
+                             console.log(`[LogicalCube]   -> Still Partial: ${res}`);
                          } else {
                              // Wrong!
                              this.wrongMoves = combined;
                              this.partialMove = null;
+                             console.log(`[LogicalCube]   -> Partial Failed -> Wrong: ${this.wrongMoves.join(' ')}`);
                          }
                     }
                 } else {
                     // Became multiple moves (e.g. R then U) -> Wrong
                     this.wrongMoves = combined;
                     this.partialMove = null;
+                    console.log(`[LogicalCube]   -> Partial Broken -> Wrong: ${this.wrongMoves.join(' ')}`);
                 }
             }
             // 3. Check New Move Progress
@@ -194,16 +202,20 @@ export class LogicalCube {
                     if (moveStr === expected) {
                         // Exact match
                         this.progressIndex++;
+                        console.log(`[LogicalCube]   -> Match! Next Index=${this.progressIndex}`);
                     } else if (expected.includes("2") && moveStr[0] === expected[0] && !moveStr.includes("2")) {
                         // Partial match (e.g. R for R2)
                         this.partialMove = moveStr;
+                        console.log(`[LogicalCube]   -> Partial Start: ${moveStr} (Target: ${expected})`);
                     } else {
                         // Wrong move
                         this.wrongMoves.push(moveStr);
+                        console.log(`[LogicalCube]   -> Wrong Move: ${moveStr} (Expected: ${expected})`);
                     }
                 } else {
                     // Scramble done, extra move
                     this.wrongMoves.push(moveStr);
+                    console.log(`[LogicalCube]   -> Extra Move: ${moveStr}`);
                 }
             }
             

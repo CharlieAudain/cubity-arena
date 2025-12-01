@@ -81,7 +81,10 @@ const SmartCube3D: React.FC<SmartCube3DProps> = ({
   // Logical Cube (Shadow Engine)
   // Logical Cube (Shadow Engine)
   // Logical Cube (Shadow Engine)
+  // LogicalCube (Shadow Engine) - Only if connected
   useEffect(() => {
+    if (!isConnected) return;
+
     let engine: LogicalCube | null = null;
     let isMounted = true;
     
@@ -127,7 +130,7 @@ const SmartCube3D: React.FC<SmartCube3DProps> = ({
             engine.off('reset', handleReset);
         }
     };
-  }, []); // Run once on mount
+  }, [isConnected]); // Re-run if connection status changes
 
   // Handle Scramble Updates
   useEffect(() => {

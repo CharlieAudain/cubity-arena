@@ -296,6 +296,9 @@ const TimerView = ({
   // Track Scramble Progress via LogicalCube Events
   useEffect(() => {
       const handleProgress = ({ movesDone, wrongMoves, isComplete }) => {
+          // Only track scramble when IDLE
+          if (timerState !== TimerState.IDLE) return;
+
           setMovesDone(movesDone);
           setWrongMoves(wrongMoves);
           setScrambleComplete(isComplete);
@@ -375,7 +378,7 @@ const TimerView = ({
       {/* Scramble Display */}
       <div className="text-center mb-12 relative group">
         <div className="text-2xl md:text-3xl font-mono font-bold text-white tracking-wider leading-relaxed break-words max-w-4xl mx-auto drop-shadow-lg">
-          {scramble}
+          {renderScramble()}
         </div>
         
         {/* Scramble Status Indicator */}

@@ -621,11 +621,11 @@ export class GanDriver extends SmartDevice {
     const pow = parseInt(bits.slice(64, 66), 2);
     const axisVal = parseInt(bits.slice(66, 72), 2);
     const axis = [2, 32, 8, 1, 16, 4].indexOf(axisVal);
-    
-    if (axis === -1) {
-      Logger.warn('GanDriver', 'Invalid axis:', axisVal);
-      return;
-    }
+
+    // Debug Raw Values
+    // Logger.log('GanDriver', `Raw Move: axisVal=${axisVal}, pow=${pow}`);
+
+    if (axis === -1) return;
 
     let suffix = "";
     if (pow === 0) suffix = "";
@@ -633,6 +633,7 @@ export class GanDriver extends SmartDevice {
     else if (pow === 2) suffix = "2";
 
     const move = "URFDLB".charAt(axis) + suffix;
+    Logger.log('GanDriver', `Raw: axisVal=${axisVal} (Face: ${"URFDLB".charAt(axis)}), pow=${pow} -> Decoded: ${move}`);
 
     // Add to buffer and process
     this.moveBuffer.push({ move, moveCnt, timestamp: Date.now() });

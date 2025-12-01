@@ -1,4 +1,4 @@
-import isaac from './isaac';
+import isaac from './isaac.js';
 
 const DEBUG = false;
 

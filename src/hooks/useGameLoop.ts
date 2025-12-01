@@ -96,16 +96,33 @@ export function useGameLoop(): GameLoopResult {
 
     const startInspection = useCallback(() => {
         console.log('[GameLoop] Starting Inspection');
+        // Disable scramble tracking when inspection starts
+        LogicalCube.getInstance().then(cube => cube.resetScrambleTracking());
         setTimerState(TimerState.INSPECTION);
         setInspectionTime(15);
         setPenalty(null);
     }, []);
 
     const startTimer = useCallback((timestamp?: number) => {
+        if (timerState !== TimerState.IDLE && timerState !== TimerState.INSPECTION) return;
+        
+        // If starting from IDLE (no inspection), clear the scramble moves.
+        // If starting from INSPECTION, keep any moves made during inspection (e.g. alignment).
+        if (timerState === TimerState.IDLE) {
+             LogicalCube.getInstance().then(cube => cube.clearSolutionMoves());
+        }
+
         console.log('[GameLoop] Starting Timer');
         setTimerState(TimerState.RUNNING);
         startTimeRef.current = timestamp || Date.now();
-    }, []);
+        setPenalty(null); // Reset penalty
+        
+        // Clear inspection interval if running
+        if (inspectionIntervalRef.current) {
+            clearInterval(inspectionIntervalRef.current);
+            inspectionIntervalRef.current = null;
+        }
+    }, [timerState]);
 
     const stopTimer = useCallback((timestamp?: number, solutionMoves?: string[]) => {
         if (timerState !== TimerState.RUNNING && timerState !== TimerState.INSPECTION) return;
