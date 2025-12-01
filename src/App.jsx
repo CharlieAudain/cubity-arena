@@ -602,7 +602,7 @@ export default function App() {
             </>
           ) : (
             /* Landing Page */
-            <LandingPage onLogin={handleGoogleLogin} />
+            <LandingPage onGoogleLogin={handleGoogleLogin} onEmailLogin={() => setShowEmailAuth(true)} />
           )
         )}
 
