@@ -93,17 +93,56 @@ export function useGameLoop(): GameLoopResult {
     }, [timerState]);
 
     const startInspection = useCallback(() => {
-        console.log('[GameLoop] Starting Inspection');
+        // Disable scramble tracking when inspection starts
+        LogicalCube.getInstance().then(cube => cube.resetScrambleTracking());
         setTimerState(TimerState.INSPECTION);
         setInspectionTime(15);
         setPenalty(null);
+        
+        // Clear any existing inspection interval before starting a new one
+        if (inspectionIntervalRef.current) {
+            clearInterval(inspectionIntervalRef.current);
+        }
+
+        inspectionIntervalRef.current = setInterval(() => {
+            setInspectionTime(prev => {
+                const next = prev - 1;
+                // Audio Alerts
+                if (next === 7) speak("Eight Seconds");
+                if (next === 3) speak("Twelve Seconds");
+                
+                // Penalties
+                if (next === -1) setPenalty('+2');
+                if (next === -3) setPenalty('DNF');
+
+                if (next <= 0) {
+                    if (inspectionIntervalRef.current) clearInterval(inspectionIntervalRef.current);
+                    return 0;
+                }
+                return next;
+            });
+        }, 1000);
     }, []);
 
     const startTimer = useCallback((timestamp?: number) => {
-        console.log('[GameLoop] Starting Timer');
+        if (timerState !== TimerState.IDLE && timerState !== TimerState.INSPECTION) return;
+        
+        // If starting from IDLE (no inspection), clear the scramble moves.
+        // If starting from INSPECTION, keep any moves made during inspection (e.g. alignment).
+        if (timerState === TimerState.IDLE) {
+             LogicalCube.getInstance().then(cube => cube.clearSolutionMoves());
+        }
+
         setTimerState(TimerState.RUNNING);
         startTimeRef.current = timestamp || Date.now();
-    }, []);
+        setPenalty(null); // Reset penalty
+        
+        // Clear inspection interval if running
+        if (inspectionIntervalRef.current) {
+            clearInterval(inspectionIntervalRef.current);
+            inspectionIntervalRef.current = null;
+        }
+    }, [timerState]);
 
     const stopTimer = useCallback((timestamp?: number, solutionMoves?: string[]) => {
         if (timerState !== TimerState.RUNNING && timerState !== TimerState.INSPECTION) return;

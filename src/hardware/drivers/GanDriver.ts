@@ -623,7 +623,6 @@ export class GanDriver extends SmartDevice {
     const axis = [2, 32, 8, 1, 16, 4].indexOf(axisVal);
     
     if (axis === -1) {
-      Logger.warn('GanDriver', 'Invalid axis:', axisVal);
       return;
     }
 

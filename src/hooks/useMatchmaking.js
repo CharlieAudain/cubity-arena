@@ -48,8 +48,24 @@ export const useMatchmaking = (user) => {
         return () => {
             socket.off('match_found');
             socket.off('error');
+
+            // If user leaves the page while searching, remove them from queue
+            // We can't access current 'status' state here directly due to closure staleness 
+            // unless we add it to dependency array.
+            // But adding 'status' to dependency array re-runs effect on status change.
+            // Better approach: Use a ref or separate effect.
         };
     }, [socket, user]);
+
+    // Separate effect for cleanup on unmount if searching
+    useEffect(() => {
+        return () => {
+            if (status === 'searching' && socket) {
+                console.log("Navigating away, leaving queue...");
+                socket.emit('leave_queue');
+            }
+        };
+    }, [status, socket]);
 
     const findMatch = (queueType) => {
         if (!user) {

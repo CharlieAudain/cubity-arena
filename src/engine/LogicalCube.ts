@@ -114,6 +114,14 @@ export class LogicalCube {
     }
 
     /**
+     * Clear the current solution moves.
+     * Call this when the timer starts to ensure only solving moves are recorded.
+     */
+    public clearSolutionMoves() {
+        this.currentSolutionMoves = [];
+    }
+
+    /**
      * Check if the hardware state matches the target scramble.
      * Compares RAW hardware state against target.
      */
@@ -139,7 +147,6 @@ export class LogicalCube {
 
         // VALIDATION:
         if (!this.validateMove(moveStr)) {
-            console.warn(`[LogicalCube] ❌ Invalid move rejected: ${moveStr}`);
             return;
         }
 
@@ -386,6 +393,7 @@ export class LogicalCube {
         
         // Emit to listeners
         if (this.listeners['update']) {
+            // console.log(`[LogicalCube] Emitting update: move=${moveStr}, timestamp=${timestamp}`);
             this.listeners['update'].forEach(listener => listener({
                 move: moveStr,
                 state: facelets,
