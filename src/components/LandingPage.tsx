@@ -17,9 +17,9 @@ export default function LandingPage({ onGoogleLogin, onEmailLogin }: { onGoogleL
             </div>
 
             <img 
-              src="/favicon.svg" 
+              src="/vite.svg" 
               alt="Cubity Logo" 
-              className="w-32 h-32 mb-6 animate-in fade-in zoom-in duration-700 drop-shadow-[0_0_15px_rgba(99,102,241,0.5)]" 
+              className="w-32 h-32 mb-6 mx-auto animate-in fade-in zoom-in duration-700 drop-shadow-[0_0_15px_rgba(99,102,241,0.5)]" 
             />
 
             <h1 className="text-5xl md:text-8xl font-black tracking-tighter text-white mb-6 animate-in fade-in slide-in-from-bottom-8 duration-700 delay-100">
