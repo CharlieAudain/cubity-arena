@@ -53,7 +53,7 @@ export default function LandingPage({ onGoogleLogin, onEmailLogin }: { onGoogleL
                 Log In / Sign Up
               </button>
 
-              <a href="https://discord.gg/cubity" target="_blank" rel="noopener noreferrer" className="bg-slate-900 hover:bg-slate-800 text-white px-8 py-4 rounded-full font-bold text-lg transition-all border border-white/10 hover:border-white/20 flex items-center justify-center gap-2 hover:scale-105 active:scale-95 w-full md:w-auto">
+              <a href="https://discord.gg/TyhEqFhyYf" target="_blank" rel="noopener noreferrer" className="bg-slate-900 hover:bg-slate-800 text-white px-8 py-4 rounded-full font-bold text-lg transition-all border border-white/10 hover:border-white/20 flex items-center justify-center gap-2 hover:scale-105 active:scale-95 w-full md:w-auto">
                   Join Discord
               </a>
             </div>

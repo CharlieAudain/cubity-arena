@@ -803,6 +803,9 @@ export default function App() {
                     <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
                         <Users className="w-5 h-5 text-indigo-400" /> Account
                     </h3>
+                    <a href="https://discord.gg/TyhEqFhyYf" target="_blank" rel="noopener noreferrer" className="w-full bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 px-4 py-3 rounded-lg font-bold transition-colors flex items-center justify-center gap-2 mb-4">
+                        <Discord className="w-4 h-4" /> Join Discord
+                    </a>
                     <button onMouseUp={blurOnUI} onClick={handleLogout} className="w-full bg-slate-800 hover:bg-slate-700 text-white px-4 py-3 rounded-lg font-bold transition-colors flex items-center justify-center gap-2">
                         <LogOut className="w-4 h-4" /> Log Out
                     </button>
