@@ -18,6 +18,7 @@ import LogoVelocity from './components/LogoVelocity';
 import EmailPasswordAuth from './components/EmailPasswordAuth';
 import AdminDashboard from './components/AdminDashboard';
 import UsernameSetup from './components/UsernameSetup';
+import LandingPage from './components/LandingPage';
 
 import { useHardwareDriver } from './hooks/useHardwareDriver';
 import { socket } from './hooks/useSocket';
@@ -390,16 +391,19 @@ export default function App() {
             </div>
           </div>
           <nav className="hidden md:flex items-center gap-1">
-            <button onMouseUp={blurOnUI} onClick={() => setActiveTab('timer')} className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center gap-2 ${activeTab === 'timer' ? 'text-white bg-white/10' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
-              <Timer className="w-4 h-4" /> Timer
-            </button>
-            <button onMouseUp={blurOnUI} onClick={() => setActiveTab('arena')} className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center gap-2 ${activeTab === 'arena' ? 'text-white bg-white/10' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
-              <Swords className="w-4 h-4" /> Arena
-            </button>
-            <button onMouseUp={blurOnUI} onClick={() => setActiveTab('stats')} className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center gap-2 ${activeTab === 'stats' ? 'text-white bg-white/10' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
-              <TrendingUp className="w-4 h-4" /> Stats
-            </button>
-
+            {user && (
+              <>
+                <button onMouseUp={blurOnUI} onClick={() => setActiveTab('timer')} className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center gap-2 ${activeTab === 'timer' ? 'text-white bg-white/10' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
+                  <Timer className="w-4 h-4" /> Timer
+                </button>
+                <button onMouseUp={blurOnUI} onClick={() => setActiveTab('arena')} className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center gap-2 ${activeTab === 'arena' ? 'text-white bg-white/10' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
+                  <Swords className="w-4 h-4" /> Arena
+                </button>
+                <button onMouseUp={blurOnUI} onClick={() => setActiveTab('stats')} className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center gap-2 ${activeTab === 'stats' ? 'text-white bg-white/10' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
+                  <TrendingUp className="w-4 h-4" /> Stats
+                </button>
+              </>
+            )}
           </nav>
         </div>
 
@@ -598,29 +602,7 @@ export default function App() {
             </>
           ) : (
             /* Landing Page */
-            <div className="text-center py-20">
-              <div className="mb-8 relative group inline-block">
-                <div className="absolute -inset-1 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-full blur opacity-50 group-hover:opacity-75 transition duration-1000"></div>
-                <div className="relative bg-slate-900 p-6 rounded-full border border-white/10">
-                  <LogoVelocity className="w-20 h-20 text-white" />
-                </div>
-              </div>
-              <h1 className="text-5xl font-black italic text-white mb-4 tracking-tighter">CUBITY <span className="text-blue-500">ARENA</span></h1>
-              <p className="text-slate-400 text-lg mb-8 max-w-md mx-auto">The fastest, most competitive speedcubing platform on the web. Join the race.</p>
-              <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <button onMouseUp={blurOnUI} onClick={handleGuestLogin} className="bg-blue-600 hover:bg-blue-500 text-white px-8 py-4 rounded-xl font-bold flex items-center justify-center gap-2 transition-all hover:scale-105">
-                  <Zap className="w-5 h-5" /> Start Guest Session
-                </button>
-                <button onMouseUp={blurOnUI} onClick={handleGoogleLogin} className="bg-slate-800 hover:bg-slate-700 text-white px-8 py-4 rounded-xl font-bold border border-white/10 flex items-center justify-center gap-2 transition-all hover:scale-105">
-                  <Users className="w-5 h-5" /> Sign in with Google
-                </button>
-              </div>
-              <div className="mt-8 flex justify-center">
-                <a href="https://discord.gg/cubity" target="_blank" rel="noopener noreferrer" className="text-slate-500 hover:text-indigo-400 flex items-center gap-2 text-sm font-bold transition-colors">
-                  <MessageCircle className="w-4 h-4" /> Join our Discord Community
-                </a>
-              </div>
-            </div>
+            <LandingPage onLogin={handleGoogleLogin} />
           )
         )}
 
@@ -829,12 +811,14 @@ export default function App() {
         )}
       </main>
 
-      <nav className="fixed bottom-0 w-full bg-slate-950/90 backdrop-blur-xl border-t border-white/5 pb-safe px-6 py-2 flex justify-between items-center z-50 md:hidden h-20">
-        <NavIcon icon={Timer} label="Timer" active={activeTab === 'timer'} onClick={() => setActiveTab('timer')} />
-        <NavIcon icon={Swords} label="Arena" active={activeTab === 'arena'} onClick={() => setActiveTab('arena')} />
-        <NavIcon icon={TrendingUp} label="Stats" active={activeTab === 'stats'} onClick={() => setActiveTab('stats')} />
-        <NavIcon icon={Settings} label="Settings" active={activeTab === 'more'} onClick={() => setActiveTab('more')} />
-      </nav>
+      {user && (
+        <nav className="fixed bottom-0 w-full bg-slate-950/90 backdrop-blur-xl border-t border-white/5 pb-safe px-6 py-2 flex justify-between items-center z-50 md:hidden h-20">
+          <NavIcon icon={Timer} label="Timer" active={activeTab === 'timer'} onClick={() => setActiveTab('timer')} />
+          <NavIcon icon={Swords} label="Arena" active={activeTab === 'arena'} onClick={() => setActiveTab('arena')} />
+          <NavIcon icon={TrendingUp} label="Stats" active={activeTab === 'stats'} onClick={() => setActiveTab('stats')} />
+          <NavIcon icon={Settings} label="Settings" active={activeTab === 'more'} onClick={() => setActiveTab('more')} />
+        </nav>
+      )}
 
       {/* Email/Password Auth Modal */}
       {showEmailAuth && (
