@@ -18,6 +18,7 @@ interface GameLoopResult {
     recenter: () => void;
     stop: (timestamp?: number, solutionMoves?: string[]) => void;
     lastSolutionMoves: React.MutableRefObject<string[]>;
+    isScrambled: boolean;
 }
 
 /**
@@ -34,6 +35,7 @@ export function useGameLoop(): GameLoopResult {
     const [time, setTime] = useState(0);
     const [inspectionTime, setInspectionTime] = useState(15);
     const [penalty, setPenalty] = useState<string | null>(null);
+    const [isScrambled, setIsScrambled] = useState(false);
     
     const startTimeRef = useRef<number>(0);
     const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -131,6 +133,8 @@ export function useGameLoop(): GameLoopResult {
         setTime(0);
         setInspectionTime(0);
         setPenalty(null);
+        setIsScrambled(false);
+        startTimeRef.current = 0;
     }, []);
 
     const recenter = useCallback(async () => {
@@ -162,6 +166,7 @@ export function useGameLoop(): GameLoopResult {
         };
         
         const handleScrambleProgress = ({ isComplete }: { isComplete: boolean }) => {
+             setIsScrambled(isComplete);
              // Allow start if IDLE or STOPPED (after previous solve)
              if (isComplete && (timerState === TimerState.IDLE || timerState === TimerState.STOPPED)) {
                  console.log('[GameLoop] Scramble Complete. Starting Inspection.');
@@ -200,5 +205,5 @@ export function useGameLoop(): GameLoopResult {
     
     // Let's modify handleSolved to update the ref.
     
-    return { timerState, time, inspectionTime, penalty, startInspection, reset, recenter, stop: stopTimer, lastSolutionMoves };
+    return { timerState, time, inspectionTime, penalty, startInspection, reset, recenter, stop: stopTimer, lastSolutionMoves, isScrambled };
 }

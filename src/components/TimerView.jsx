@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Trophy, Swords, RotateCcw, Grid2x2, Box, Grid3x3, Activity, Unplug } from 'lucide-react';
+import { Trophy, Swords, RotateCcw, Grid2x2, Box, Grid3x3, Activity, Unplug, RefreshCw, Edit2 } from 'lucide-react';
 import { generateScramble, getDailySeed, getSolvedState, getInverseMove, simplifyMoveStack, SOLVED_FACELETS } from '../utils/cube';
 import { calculateAverage } from '../utils/stats';
 import SmartCube3D from './SmartCube3D';
@@ -27,7 +27,7 @@ const TimerView = ({
   onStatusChange = null // NEW: Callback for status changes
 }) => {
   // Use the new Game Loop Hook (Single Source of Truth)
-  const { timerState, time, inspectionTime, penalty, startInspection, reset, recenter, stop, lastSolutionMoves } = useGameLoop();
+  const { timerState, time, inspectionTime, penalty, startInspection, reset, recenter, stop, lastSolutionMoves, isScrambled } = useGameLoop();
   
   // Calibration State
   const [hasCalibrated, setHasCalibrated] = useState(false);
@@ -372,15 +372,26 @@ const TimerView = ({
     >
 
 
-      <div className={`text-center mb-8 transition-opacity duration-300 ${timerState === TimerState.RUNNING ? 'opacity-0' : 'opacity-100'} w-full mt-16 relative`}>
-        <div className="flex items-center justify-center gap-2 mb-4 text-slate-500 text-xs font-bold uppercase tracking-widest">
-          {dailyMode ? <span className="text-indigo-400 flex gap-2 items-center"><Trophy className="w-4 h-4" /> DAILY CHALLENGE</span> : !isBattle && <><Swords className="w-4 h-4" /> {cubeType} Scramble</>}
-        </div>
-        <div className="text-xl md:text-3xl font-mono font-medium text-slate-300 max-w-3xl leading-relaxed px-4 text-center mx-auto min-h-[3rem] flex items-center justify-center">
-          {renderScramble()}
+      {/* Scramble Display */}
+      <div className="text-center mb-12 relative group">
+        <div className="text-2xl md:text-3xl font-mono font-bold text-white tracking-wider leading-relaxed break-words max-w-4xl mx-auto drop-shadow-lg">
+          {scramble}
         </div>
         
-        <div className="flex justify-center gap-4 mt-4 items-center">
+        {/* Scramble Status Indicator */}
+        {smartCube?.isConnected && timerState === TimerState.IDLE && (
+            <div className={`mt-4 inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border ${isScrambled ? 'bg-green-500/20 text-green-400 border-green-500/30' : 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'}`}>
+                <div className={`w-2 h-2 rounded-full ${isScrambled ? 'bg-green-500 animate-pulse' : 'bg-yellow-500'}`}></div>
+                {isScrambled ? 'Scrambled & Ready' : 'Scramble Required'}
+            </div>
+        )}
+
+        <div className="absolute top-full left-1/2 -translate-x-1/2 mt-4 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
+          <button onMouseUp={blurOnUI} onClick={() => setScramble(generateScramble(cubeType))} className="p-2 bg-white/10 hover:bg-white/20 rounded-lg text-white transition-colors"><RefreshCw className="w-5 h-5" /></button>
+          <button onMouseUp={blurOnUI} onClick={() => setShowScrambleInput(true)} className="p-2 bg-white/10 hover:bg-white/20 rounded-lg text-white transition-colors"><Edit2 className="w-5 h-5" /></button>
+        </div>
+      </div>
+          <div className="flex justify-center gap-4 mt-4 items-center">
           {!dailyMode && !disableScrambleGen && <button onMouseUp={blurOnUI} onClick={resetTimer} className="text-slate-600 hover:text-white transition-colors"><RotateCcw className="w-5 h-5" /></button>}
 
           {smartCube && smartCube.isConnected && (
@@ -428,7 +439,7 @@ const TimerView = ({
             </div>
         )}
 
-      </div>
+
 
       {/* 3D CUBE (Always Visible) */}
       <div className="mb-8 relative z-10 w-full max-w-lg mx-auto h-48 md:h-64">

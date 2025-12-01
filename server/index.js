@@ -32,8 +32,23 @@ import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 
 // Initialize Firebase Admin
-// Load the key
-const serviceAccount = require("./service-account.json");
+let serviceAccount;
+
+if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+  try {
+    serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+  } catch (e) {
+    console.error("❌ Failed to parse FIREBASE_SERVICE_ACCOUNT environment variable");
+    process.exit(1);
+  }
+} else {
+  try {
+    serviceAccount = require("./service-account.json");
+  } catch (e) {
+    console.error("❌ service-account.json not found and FIREBASE_SERVICE_ACCOUNT not set");
+    process.exit(1);
+  }
+}
 
 // Initialize the Admin SDK
 if (admin.apps.length === 0) {
