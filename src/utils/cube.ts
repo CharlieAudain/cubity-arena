@@ -1,57 +1,28 @@
 import { puzzles } from "cubing/puzzles";
 import { Alg } from "cubing/alg";
+import { randomScrambleForEvent } from "cubing/scramble";
 
-// --- UTILS: SCRAMBLE GENERATORS ---
+export const generateScramble = async (type: string = '3x3'): Promise<string> => {
+    // Map UI types to WCA Event IDs
+    const eventMap: Record<string, string> = {
+        '3x3': '333',
+        '2x2': '222',
+        '4x4': '444',
+        'Pyraminx': 'pyr',
+        'Megaminx': 'minx',
+        'Skewb': 'skewb'
+    };
 
-export const generateScramble = (type: string = '3x3', seed: number | null = null): string => {
-  const moves3x3 = ['R', 'L', 'U', 'D', 'F', 'B'];
-  const moves2x2 = ['R', 'U', 'F']; 
-  const moves4x4 = ['R', 'L', 'U', 'D', 'F', 'B', 'Rw', 'Lw', 'Uw', 'Dw', 'Fw', 'Bw']; 
-  const modifiers = ['', "'", '2'];
-  
-  let moves = moves3x3;
-  let length = 20;
-
-  if (type === '2x2') { moves = moves2x2; length = 9; }
-  if (type === '4x4') { moves = moves4x4; length = 40; }
-
-  let scramble: string[] = [];
-  let lastMove = '';
-  let secondLastMove = '';
-
-  const pseudoRandom = () => {
-    if (seed) {
-      const x = Math.sin(seed++) * 10000;
-      return x - Math.floor(x);
-    }
-    return Math.random();
-  };
-
-  const getBaseMove = (m: string) => m.replace(/[w']/g, '');
-
-  const isOpposite = (m1: string, m2: string) => {
-    const pairs: Record<string, string> = { R: 'L', L: 'R', U: 'D', D: 'U', F: 'B', B: 'F', Rw: 'Lw', Lw: 'Rw', Uw: 'Dw', Dw: 'Uw', Fw: 'Bw', Bw: 'Fw' };
-    return pairs[m1] === m2;
-  };
-
-  for (let i = 0; i < length; i++) {
-    let moveIndex = Math.floor(pseudoRandom() * moves.length);
-    let move = moves[moveIndex];
+    const eventId = eventMap[type] || '333';
     
-    while (
-      getBaseMove(move) === getBaseMove(lastMove) || 
-      (getBaseMove(move) === getBaseMove(secondLastMove) && isOpposite(getBaseMove(move), getBaseMove(lastMove)))
-    ) {
-      moveIndex = Math.floor(pseudoRandom() * moves.length);
-      move = moves[moveIndex];
+    try {
+        // Generate WCA-compliant random-state scramble
+        const scramble = await randomScrambleForEvent(eventId);
+        return scramble.toString();
+    } catch (e) {
+        console.error("Scramble generation failed", e);
+        return "R U R' U'"; // Fail-safe fallback
     }
-    
-    const mod = modifiers[Math.floor(pseudoRandom() * modifiers.length)];
-    scramble.push(move + mod);
-    secondLastMove = lastMove;
-    lastMove = move;
-  }
-  return scramble.join(' ');
 };
 
 export const getDailySeed = (): number => {

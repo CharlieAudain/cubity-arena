@@ -8,6 +8,33 @@ const ICE_SERVERS = {
     ]
 };
 
+const verifyEncryption = async (pc) => {
+  try {
+    const stats = await pc.getStats();
+    let isEncrypted = false;
+
+    stats.forEach((report) => {
+      if (report.type === 'transport') {
+        const dtlsState = report.dtlsState;
+        if (dtlsState === 'connected') {
+            isEncrypted = true;
+        }
+      }
+    });
+
+    if (!isEncrypted) {
+        console.warn('[Security] ⚠️ WebRTC connection is NOT fully encrypted (DTLS state invalid).');
+    } else {
+        console.log('[Security] 🔒 WebRTC DTLS Encryption Verified.');
+    }
+
+    return isEncrypted;
+  } catch (e) {
+    console.error('[Security] Failed to verify encryption:', e);
+    return false;
+  }
+};
+
 export const useWebRTC = (roomId, userId, isHost) => {
     const [status, setStatus] = useState('DISCONNECTED'); // DISCONNECTED, CONNECTING, CONNECTED, FAILED
     const [lastMessage, setLastMessage] = useState(null);
@@ -38,9 +65,18 @@ export const useWebRTC = (roomId, userId, isHost) => {
                 }
             };
 
-            peer.onconnectionstatechange = () => {
+            peer.onconnectionstatechange = async () => {
                 console.log("[WebRTC] Connection State:", peer.connectionState);
-                if (peer.connectionState === 'connected') setStatus('CONNECTED');
+                if (peer.connectionState === 'connected') {
+                    const isSecure = await verifyEncryption(peer);
+                    if (isSecure) {
+                        setStatus('CONNECTED');
+                    } else {
+                        console.error('[Security] Connection insecure. Closing.');
+                        peer.close();
+                        setStatus('FAILED');
+                    }
+                }
                 if (peer.connectionState === 'disconnected' || peer.connectionState === 'failed') setStatus('FAILED');
             };
 

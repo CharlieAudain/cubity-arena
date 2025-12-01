@@ -621,11 +621,10 @@ export class GanDriver extends SmartDevice {
     const pow = parseInt(bits.slice(64, 66), 2);
     const axisVal = parseInt(bits.slice(66, 72), 2);
     const axis = [2, 32, 8, 1, 16, 4].indexOf(axisVal);
-
-    // Debug Raw Values
-    // Logger.log('GanDriver', `Raw Move: axisVal=${axisVal}, pow=${pow}`);
-
-    if (axis === -1) return;
+    
+    if (axis === -1) {
+      return;
+    }
 
     let suffix = "";
     if (pow === 0) suffix = "";

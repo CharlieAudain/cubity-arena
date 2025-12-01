@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Analytics } from '@vercel/analytics/react';
 import { 
-  Users, Zap, Settings, Timer, LogIn, Activity, Bluetooth, Flame, LogOut, Swords, AlertCircle, TrendingUp, Trophy, Shield, User, Lock, X 
+  Users, Zap, Settings, Timer, LogIn, Activity, Bluetooth, Flame, LogOut, Swords, AlertCircle, TrendingUp, Trophy, Shield, User, Lock, X, MessageCircle 
 } from 'lucide-react';
 import { 
   onAuthStateChanged, signInAnonymously, signOut, GoogleAuthProvider, signInWithPopup, linkWithPopup, sendPasswordResetEmail
@@ -18,7 +18,7 @@ import LogoVelocity from './components/LogoVelocity';
 import EmailPasswordAuth from './components/EmailPasswordAuth';
 import AdminDashboard from './components/AdminDashboard';
 import UsernameSetup from './components/UsernameSetup';
-import HardwareTest from './components/HardwareTest';
+
 import { useHardwareDriver } from './hooks/useHardwareDriver';
 import { socket } from './hooks/useSocket';
 import { blurOnUI } from './utils/ui';
@@ -399,9 +399,7 @@ export default function App() {
             <button onMouseUp={blurOnUI} onClick={() => setActiveTab('stats')} className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center gap-2 ${activeTab === 'stats' ? 'text-white bg-white/10' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
               <TrendingUp className="w-4 h-4" /> Stats
             </button>
-            <button onMouseUp={blurOnUI} onClick={() => setActiveTab('hardware-test')} className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center gap-2 ${activeTab === 'hardware-test' ? 'text-white bg-white/10' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
-              <Bluetooth className="w-4 h-4" /> Test
-            </button>
+
           </nav>
         </div>
 
@@ -460,6 +458,10 @@ export default function App() {
                       <div className="h-px bg-white/10 my-1"></div>
                     </>
                   )}
+                  <a href="https://discord.gg/cubity" target="_blank" rel="noopener noreferrer" className="w-full flex items-center gap-2 px-4 py-3 text-sm text-indigo-400 hover:bg-indigo-500/10 hover:text-indigo-300 rounded-lg transition-colors font-medium">
+                    <MessageCircle className="w-4 h-4" />
+                    <span>Join Discord</span>
+                  </a>
                   <button onMouseUp={blurOnUI} onClick={() => setActiveTab('more')} className="w-full flex items-center gap-2 px-4 py-3 text-sm text-slate-300 hover:bg-white/5 hover:text-white rounded-lg transition-colors font-medium">
                     <Settings className="w-4 h-4" />
                     <span>Settings</span>
@@ -551,7 +553,7 @@ export default function App() {
 
         {activeTab === 'stats' && user && <StatsView userId={user.uid} />}
         
-        {activeTab === 'hardware-test' && <HardwareTest />}
+
         
         {activeTab === 'arena' && user && <ArenaView user={user} smartCube={smartCube} isAdmin={isAdmin()} />}
 
@@ -612,6 +614,11 @@ export default function App() {
                 <button onMouseUp={blurOnUI} onClick={handleGoogleLogin} className="bg-slate-800 hover:bg-slate-700 text-white px-8 py-4 rounded-xl font-bold border border-white/10 flex items-center justify-center gap-2 transition-all hover:scale-105">
                   <Users className="w-5 h-5" /> Sign in with Google
                 </button>
+              </div>
+              <div className="mt-8 flex justify-center">
+                <a href="https://discord.gg/cubity" target="_blank" rel="noopener noreferrer" className="text-slate-500 hover:text-indigo-400 flex items-center gap-2 text-sm font-bold transition-colors">
+                  <MessageCircle className="w-4 h-4" /> Join our Discord Community
+                </a>
               </div>
             </div>
           )

@@ -1,9 +1,11 @@
+
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Trophy, Swords, RotateCcw, Grid2x2, Box, Grid3x3, Activity, Unplug, RefreshCw, Edit2 } from 'lucide-react';
+import { Trophy, Swords, RotateCcw, Grid2x2, Box, Grid3x3, Unplug, RefreshCw, Edit2 } from 'lucide-react';
 import { generateScramble, getDailySeed, getSolvedState, getInverseMove, simplifyMoveStack, SOLVED_FACELETS } from '../utils/cube';
 import { calculateAverage } from '../utils/stats';
 import SmartCube3D from './SmartCube3D';
-import DebugOverlay from './DebugOverlay';
+import { ErrorBoundary } from './ErrorBoundary';
+
 import { LogicalCube } from '../engine/LogicalCube';
 import { useGameLoop, TimerState } from '../hooks/useGameLoop';
 
@@ -55,7 +57,7 @@ const TimerView = ({
   const [scramble, setScramble] = useState(forcedScramble || '');
   const [syncTrigger, setSyncTrigger] = useState(0); // Manual sync trigger
   const [showSyncPrompt, setShowSyncPrompt] = useState(false);
-  const [showDebug, setShowDebug] = useState(false);
+
   
   const lastProcessedMoveId = useRef(0); // Track processed moves to avoid missing any
 
@@ -124,7 +126,7 @@ const TimerView = ({
 
   useEffect(() => {
     if (!disableScrambleGen && !forcedScramble) {
-      setScramble(generateScramble(cubeType, dailyMode ? getDailySeed() : null));
+      generateScramble(cubeType).then(setScramble);
     }
   }, [cubeType, dailyMode, disableScrambleGen, forcedScramble]);
 
@@ -222,8 +224,7 @@ const TimerView = ({
           
           // Generate new scramble
           if (!disableScrambleGen) {
-              const nextScramble = generateScramble(cubeType);
-              setScramble(nextScramble);
+              generateScramble(cubeType).then(setScramble);
           }
       }
       prevTimerState.current = timerState;
@@ -259,7 +260,7 @@ const TimerView = ({
           console.log('[TimerView] Force Recentering Cube State');
           handleCalibration(); // Use new handler
           setSolutionMoves([]); 
-          if (!disableScrambleGen) setScramble(generateScramble(cubeType));
+          if (!disableScrambleGen) generateScramble(cubeType).then(setScramble);
           return;
       }
 
@@ -276,7 +277,7 @@ const TimerView = ({
       if (smartCube?.moveHistory && smartCube.moveHistory.length > 0) {
         lastProcessedMoveId.current = smartCube.moveHistory[smartCube.moveHistory.length - 1].id;
       }
-      if (!disableScrambleGen) setScramble(generateScramble(cubeType));
+      if (!disableScrambleGen) generateScramble(cubeType).then(setScramble);
   };
 
   useEffect(() => {
@@ -446,18 +447,20 @@ const TimerView = ({
 
       {/* 3D CUBE (Always Visible) */}
       <div className="mb-8 relative z-10 w-full max-w-lg mx-auto h-48 md:h-64">
-          <SmartCube3D 
-              scramble={scramble} 
-              type={cubeType} 
-              moveHistory={smartCube?.isConnected ? smartCube.moveHistory : null} 
-              gyro={smartCube?.gyro}
-              facelets={smartCube?.facelets}
-              lastAction={smartCube?.lastAction}
-              onSolved={handleSolved}
-              isConnected={smartCube?.isConnected}
-              syncTrigger={syncTrigger}
-              className="h-full w-full"
-          />
+          <ErrorBoundary fallback={<div className="text-slate-500 flex items-center justify-center h-full border border-slate-700 rounded-lg">3D Cube Failed to Load</div>}>
+            <SmartCube3D 
+                scramble={scramble} 
+                type={cubeType} 
+                moveHistory={smartCube?.isConnected ? smartCube.moveHistory : null} 
+                gyro={smartCube?.gyro}
+                facelets={smartCube?.facelets}
+                lastAction={smartCube?.lastAction}
+                onSolved={handleSolved}
+                isConnected={smartCube?.isConnected}
+                syncTrigger={syncTrigger}
+                className="h-full w-full"
+            />
+          </ErrorBoundary>
       </div>
 
       <div className={`text-[6rem] md:text-[12rem] font-black font-mono tabular-nums leading-none tracking-tighter transition-colors duration-100 ${getTimerColor()} flex flex-col items-center`}>
@@ -556,19 +559,7 @@ const TimerView = ({
           ))}
       </div>
 
-      {/* Debug Overlay Toggle */}
-      <button 
-        onClick={() => setShowDebug(!showDebug)}
-        className="fixed top-4 right-4 p-2 bg-slate-800/50 hover:bg-slate-700 text-slate-400 rounded-full transition-colors z-50"
-        title="Toggle Debug Mode"
-      >
-        <Activity className="w-4 h-4" />
-      </button>
 
-      {/* Debug Overlay */}
-      {showDebug && smartCube && (
-        <DebugOverlay logs={smartCube.debugLog || []} onClose={() => setShowDebug(false)} />
-      )}
       {/* Calibration Prompt Overlay */}
       {showCalibrationPrompt && (
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm rounded-3xl">

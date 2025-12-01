@@ -33,6 +33,8 @@ const SmartCube3D: React.FC<SmartCube3DProps> = ({
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<TwistyPlayer | null>(null);
+  const moveQueue = useRef<string[]>([]);
+  const isAnimating = useRef(false);
   
   // --- STRICT SYNC: RESET ON CONNECT ---
   useEffect(() => {
@@ -78,9 +80,6 @@ const SmartCube3D: React.FC<SmartCube3DProps> = ({
     };
   }, []); // Run once on mount
 
-  // Logical Cube (Shadow Engine)
-  // Logical Cube (Shadow Engine)
-  // Logical Cube (Shadow Engine)
   // LogicalCube (Shadow Engine) - Only if connected
   useEffect(() => {
     if (!isConnected) return;
@@ -89,28 +88,26 @@ const SmartCube3D: React.FC<SmartCube3DProps> = ({
     let isMounted = true;
     
     const handleUpdate = ({ move }: { move: string }) => {
-        Logger.log('UI', 'Twist');
-        
         // ANIMATION SMOOTHING:
         // Instead of applying immediately, push to queue.
         moveQueue.current.push(move);
         processQueue();
     };
 
-    const handleReset = async ({ state }: { state: string }) => {
-        if (playerRef.current) {
-            Logger.log('UI', 'Resetting visual state to:', state);
-            
-            // Reset alg to empty
-            playerRef.current.alg = "";
-            playerRef.current.jumpToEnd();
 
-            // Apply state directly using experimentalStickering
-            // This avoids solving/inverting which can be buggy with different facelet definitions
-            // @ts-ignore
-            playerRef.current.experimentalStickering = state;
-        }
-    };
+
+  const handleReset = async ({ state }: { state: string }) => {
+      if (playerRef.current) {
+          // Reset alg to empty
+          playerRef.current.alg = "";
+          playerRef.current.jumpToEnd();
+
+          // Apply state directly using experimentalStickering
+          // This avoids solving/inverting which can be buggy with different facelet definitions
+          // @ts-ignore
+          playerRef.current.experimentalStickering = state;
+      }
+  };
 
     const initEngine = async () => {
         const instance = await LogicalCube.getInstance();
@@ -146,9 +143,16 @@ const SmartCube3D: React.FC<SmartCube3DProps> = ({
     }
   }, [scramble, isConnected]);
 
-  // Move Queue
-  const moveQueue = useRef<string[]>([]);
-  const isAnimating = useRef(false);
+  // Handle Facelets Prop Updates (for remote/opponent view)
+  useEffect(() => {
+    if (playerRef.current && facelets) {
+        // Apply facelets directly
+        // @ts-ignore
+        playerRef.current.experimentalStickering = facelets;
+    }
+  }, [facelets]);
+
+
 
   const processQueue = async () => {
       if (isAnimating.current || moveQueue.current.length === 0 || !playerRef.current) return;

@@ -81,17 +81,17 @@ Responsive: Fully optimized for Desktop (keyboard focus) and Mobile (touch-frien
 
 [x] Battle Room UI
 
-[ ] Live Progress Sync: Seeing the opponent's progress bar move in real-time during the solve.
+[ ] Live Progress Sync: Seeing the opponent's cube move in real-time during the solve.
 
 [ ] ELO System: Ranking players (Bronze/Silver/Gold) based on match outcomes.
 
 🔌 Sprint 3: Hardware Integration (Next)
 
-[ ] Bluetooth Driver: Connecting to GAN/GoCube smart cubes via Web Bluetooth API.
+[x] Bluetooth Driver: Connecting to GAN/GoCube smart cubes via Web Bluetooth API.
 
-[ ] Auto-Timer: Timer starts/stops automatically when physical moves are detected.
+[x] Auto-Timer: Timer starts/stops automatically when physical moves are detected.
 
-[ ] 3D Replay: Replaying solves move-by-move to analyze mistakes.
+[x] 3D Replay: Replaying solves move-by-move to analyze mistakes.
 
 💻 Local Development
 

@@ -2,10 +2,11 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Swords, Crown, Frown, Activity, Clock, Zap, X } from 'lucide-react';
 import TimerView from './TimerView';
 import SmartCube3D from './SmartCube3D';
-import { getSolvedState, applyCubeMove } from '../utils/cube';
+import { getSolvedState, applyMoveToFacelets, SOLVED_FACELETS } from '../utils/cube';
+import { LogicalCube } from '../engine/LogicalCube';
 import { useWebRTC } from '../hooks/useWebRTC';
 import { useSocket } from '../hooks/useSocket';
-import { doc, deleteDoc } from 'firebase/firestore';
+import { doc, deleteDoc, setDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 
 const BattleRoom = ({ user, roomData, roomId, onExit, smartCube }) => {
@@ -15,24 +16,33 @@ const BattleRoom = ({ user, roomData, roomId, onExit, smartCube }) => {
     
     // Live Sync State
     const [opponentState, setOpponentState] = useState(null); // { status, lastMove, timestamp }
-    const [opponentCubeState, setOpponentCubeState] = useState(getSolvedState(3));
+    const [opponentCubeState, setOpponentCubeState] = useState(SOLVED_FACELETS);
 
     // Determine Host Status (Prefer explicit flag from server, fallback to UID check)
     const amIPlayer1 = roomData.isHost !== undefined ? roomData.isHost : (user.uid === roomData.player1.uid);
-    const opponentName = amIPlayer1 
+    const [opponentName, setOpponentName] = useState(
+        amIPlayer1 
         ? (roomData.player2?.displayName || roomData.player2?.name) 
-        : (roomData.player1?.displayName || roomData.player1?.name);
-    
+        : (roomData.player1?.displayName || roomData.player1?.name)
+    );
+
     const socket = useSocket();
     const lastOpTimestamp = useRef(0);
 
     // WebRTC Integration
     const { status: rtcStatus, sendMessage: sendRtcMessage, lastMessage: rtcMessage } = useWebRTC(roomId, user.uid, amIPlayer1);
 
-    // Handle Socket Events (Opponent Left)
+    // Handle Socket Events (Opponent Left & Moves & Join)
     useEffect(() => {
         if (!socket) return;
         
+        socket.on('user_joined', ({ userId, userData }) => {
+            console.log(`User joined: ${userId}`, userData);
+            if (userData && userData.displayName) {
+                setOpponentName(userData.displayName);
+            }
+        });
+
         socket.on('opponent_left', () => {
             console.log('⚠️ Opponent disconnected! Waiting 15s for rejoin...');
             
@@ -47,15 +57,37 @@ const BattleRoom = ({ user, roomData, roomId, onExit, smartCube }) => {
             return () => clearTimeout(disconnectTimer);
         });
 
+        // Socket.IO Fallback/Primary for Moves
+        socket.on('opponent_move', (data) => {
+            // data = { move: "R", state: "UUU...", userId: "...", timestamp: ... }
+            // console.log('Socket Opponent Move:', data);
+            
+            // Deduplication: Ignore if we've already processed this timestamp or newer
+            if (data.timestamp && data.timestamp <= lastOpTimestamp.current) {
+                return;
+            }
+            if (data.timestamp) lastOpTimestamp.current = data.timestamp;
+
+            if (data.state) {
+                 setOpponentCubeState(data.state);
+            } else if (data.move) {
+                 setOpponentCubeState(prev => applyMoveToFacelets(prev, data.move));
+            }
+                 
+            // Also update status if needed
+            setOpponentState(prev => ({ ...prev, status: 'SOLVING', timestamp: data.timestamp || Date.now() }));
+        });
+
         return () => {
             socket.off('opponent_left');
+            socket.off('opponent_move');
         };
     }, [socket]);
 
     // Handle WebRTC Messages
     useEffect(() => {
         if (rtcMessage) {
-            console.log("WebRTC Message:", rtcMessage);
+            // console.log("WebRTC Message:", rtcMessage);
             const { type, data } = rtcMessage;
             
             if (type === 'UPDATE_OPPONENT') {
@@ -65,11 +97,13 @@ const BattleRoom = ({ user, roomData, roomId, onExit, smartCube }) => {
                     lastOpTimestamp.current = opState.timestamp;
                     setOpponentState(opState);
                     
-                    if (opState.move) {
-                        setOpponentCubeState(prev => applyCubeMove(prev, opState.move, '3x3'));
+                    if (opState.state) {
+                        setOpponentCubeState(opState.state);
+                    } else if (opState.move) {
+                        setOpponentCubeState(prev => applyMoveToFacelets(prev, opState.move));
                     }
                     if (opState.reset) {
-                         setOpponentCubeState(getSolvedState(3));
+                         setOpponentCubeState(SOLVED_FACELETS);
                     }
                 }
             } else if (type === 'RESULT_OPPONENT') {
@@ -87,15 +121,55 @@ const BattleRoom = ({ user, roomData, roomId, onExit, smartCube }) => {
         }
     }, [myTime, opponentTime]);
 
-    // Handle My Moves -> Sync via WebRTC
-    const handleMyMove = useCallback(async (move) => {
-        const timestamp = Date.now();
-        const updateData = { move, timestamp, status: 'SOLVING' }; 
-        
-        if (rtcStatus === 'CONNECTED') {
-             sendRtcMessage({ type: 'UPDATE_OPPONENT', data: updateData });
-        }
-    }, [rtcStatus, sendRtcMessage]);
+    // Handle My Moves -> Sync via WebRTC AND Socket
+    // Subscribe to LogicalCube updates directly
+    useEffect(() => {
+        let engine = null;
+
+        const handleUpdate = ({ move, state, timestamp }) => {
+            if (!move || typeof move !== 'string') return; // Ignore updates without valid moves
+
+            // console.log(`[BattleRoom] Sending Move: ${move}`);
+            const updateData = { move, state, timestamp: timestamp || Date.now(), status: 'SOLVING' }; 
+            
+            // 1. WebRTC (Fastest, P2P)
+            if (rtcStatus === 'CONNECTED') {
+                 sendRtcMessage({ type: 'UPDATE_OPPONENT', data: updateData });
+            }
+    
+            // 2. Socket.IO (Reliable, Server-Relayed)
+            if (socket) {
+                socket.emit('send_move', { move, state, timestamp: updateData.timestamp });
+            }
+        };
+
+        const init = async () => {
+            engine = await LogicalCube.getInstance();
+            engine.on('update', handleUpdate);
+
+            // Create Room in Firestore (Host Only) - Required for Security Rules
+            if (amIPlayer1) {
+                try {
+                    const roomRef = doc(db, 'artifacts', 'cubity-v1', 'public', 'data', 'rooms', roomId);
+                    await setDoc(roomRef, {
+                        createdBy: user.uid,
+                        createdAt: Date.now(),
+                        roomId: roomId,
+                        players: [roomData.player1?.uid, roomData.player2?.uid].filter(Boolean)
+                    });
+                    console.log(`✅ Created room ${roomId} in Firestore`);
+                } catch (err) {
+                    console.error("Error creating room in Firestore:", err);
+                }
+            }
+        };
+
+        init();
+
+        return () => {
+            if (engine) engine.off('update', handleUpdate);
+        };
+    }, [rtcStatus, sendRtcMessage, socket]);
 
     // Handle My Status -> Sync via WebRTC
     const handleMyStatus = useCallback(async (status) => {
@@ -206,7 +280,6 @@ const BattleRoom = ({ user, roomData, roomId, onExit, smartCube }) => {
                                 forcedType={roomData.type || '3x3'}
                                 disableScrambleGen={true}
                                 smartCube={smartCube} 
-                                onMove={handleMyMove}
                                 onStatusChange={handleMyStatus}
                             />
                         </div>
