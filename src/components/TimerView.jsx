@@ -398,7 +398,7 @@ const TimerView = ({
         </div>
       </div>
           <div className="flex justify-center gap-4 mt-4 items-center">
-          {!dailyMode && !disableScrambleGen && <button onMouseUp={blurOnUI} onClick={resetTimer} className="text-slate-600 hover:text-white transition-colors"><RotateCcw className="w-5 h-5" /></button>}
+
 
           {smartCube && smartCube.isConnected && (
             <>
