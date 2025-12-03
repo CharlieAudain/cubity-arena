@@ -1,7 +1,8 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Trophy, Swords, RotateCcw, Grid2x2, Box, Grid3x3, Unplug, RefreshCw, Edit2 } from 'lucide-react';
-import { generateScramble, getDailySeed, getSolvedState, getInverseMove, simplifyMoveStack, SOLVED_FACELETS } from '../utils/cube';
+import { getSolvedState, getInverseMove, simplifyMoveStack, SOLVED_FACELETS } from '../utils/cube';
+import { generateScramble, getDailySeed } from '../utils/scramble';
 import { calculateAverage } from '../utils/stats';
 import SmartCube3D from './SmartCube3D';
 import { ErrorBoundary } from './ErrorBoundary';
