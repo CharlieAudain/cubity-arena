@@ -67,6 +67,7 @@ const TimerView = ({
   const [scrambleLost, setScrambleLost] = useState(false);
   const [scrambleComplete, setScrambleComplete] = useState(false);
   const [showSolvePrompt, setShowSolvePrompt] = useState(false);
+  const [showScrambleInput, setShowScrambleInput] = useState(false); // NEW: State for custom scramble input
   
   // Activity Feed
   const [activityLog, setActivityLog] = useState([]);
@@ -559,6 +560,36 @@ const TimerView = ({
           ))}
       </div>
 
+
+      {/* Custom Scramble Input Modal */}
+      {showScrambleInput && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm rounded-3xl">
+            <div className="bg-slate-900 border border-white/10 p-6 rounded-2xl max-w-md w-full shadow-2xl">
+                <h3 className="text-xl font-bold text-white mb-4">Edit Scramble</h3>
+                <textarea 
+                    autoFocus
+                    className="w-full bg-slate-950 border border-white/10 rounded-lg p-3 text-white font-mono text-sm mb-4 focus:outline-none focus:border-indigo-500"
+                    rows={3}
+                    defaultValue={scramble}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                            e.preventDefault();
+                            setScramble(e.currentTarget.value);
+                            setShowScrambleInput(false);
+                        }
+                    }}
+                />
+                <div className="flex justify-end gap-2">
+                    <button onClick={() => setShowScrambleInput(false)} className="px-4 py-2 text-slate-400 hover:text-white font-bold transition-colors">Cancel</button>
+                    <button onClick={(e) => {
+                        const textarea = e.currentTarget.parentElement.previousElementSibling;
+                        setScramble(textarea.value);
+                        setShowScrambleInput(false);
+                    }} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-lg transition-colors">Save</button>
+                </div>
+            </div>
+        </div>
+      )}
 
       {/* Calibration Prompt Overlay */}
       {showCalibrationPrompt && (

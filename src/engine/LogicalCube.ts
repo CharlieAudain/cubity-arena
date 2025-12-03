@@ -71,6 +71,10 @@ export class LogicalCube {
         const tempCube = new CubieCube();
         
         // 2. Apply scramble
+        if (typeof scrambleAlg !== 'string') {
+            console.warn('[LogicalCube] Invalid scramble received:', scrambleAlg);
+            return;
+        }
         const moves = scrambleAlg.split(/\s+/).filter(m => m);
         
         // Reset tracking
