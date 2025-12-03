@@ -393,7 +393,7 @@ const TimerView = ({
         )}
 
         <div className="absolute top-full left-1/2 -translate-x-1/2 mt-4 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
-          <button onMouseUp={blurOnUI} onClick={() => setScramble(generateScramble(cubeType))} className="p-2 bg-white/10 hover:bg-white/20 rounded-lg text-white transition-colors"><RefreshCw className="w-5 h-5" /></button>
+          <button onMouseUp={blurOnUI} onClick={() => generateScramble(cubeType).then(setScramble)} className="p-2 bg-white/10 hover:bg-white/20 rounded-lg text-white transition-colors"><RefreshCw className="w-5 h-5" /></button>
           <button onMouseUp={blurOnUI} onClick={() => setShowScrambleInput(true)} className="p-2 bg-white/10 hover:bg-white/20 rounded-lg text-white transition-colors"><Edit2 className="w-5 h-5" /></button>
         </div>
       </div>
