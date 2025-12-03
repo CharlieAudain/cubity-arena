@@ -9,7 +9,6 @@ import { getFirestore, doc, getDoc } from "firebase/firestore";
 import admin from 'firebase-admin';
 import validator from 'validator';
 import { isValidUsername, isValidRoomId, sanitizeMessage, isValidMove } from './utils/validation.js';
-import { randomScrambleForEvent } from "cubing/scramble";
 
 // Load environment variables
 dotenv.config();
@@ -28,13 +27,6 @@ const firebaseConfig = {
   appId: process.env.VITE_APP_ID,
 };
 
-// Debug Config (Masked)
-console.log('Firebase Config:', {
-    ...firebaseConfig,
-    apiKey: firebaseConfig.apiKey ? '***' : 'MISSING',
-    projectId: firebaseConfig.projectId || 'MISSING'
-});
-
 const firebaseApp = initializeApp(firebaseConfig);
 const db = getFirestore(firebaseApp);
 
@@ -42,31 +34,11 @@ import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 
 // Initialize Firebase Admin
-let serviceAccount;
-
-if (process.env.FIREBASE_SERVICE_ACCOUNT) {
-  try {
-    serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-  } catch (e) {
-    console.error("❌ Failed to parse FIREBASE_SERVICE_ACCOUNT environment variable");
-    process.exit(1);
-  }
-} else {
-  try {
-    serviceAccount = require("./service-account.json");
-  } catch (e) {
-    console.error("❌ service-account.json not found and FIREBASE_SERVICE_ACCOUNT not set");
-    process.exit(1);
-  }
-}
+// Load the key
+const serviceAccount = require("./service-account.json");
 
 // Initialize the Admin SDK
 if (admin.apps.length === 0) {
-  // Verify Service Account
-  if (!serviceAccount.project_id) {
-      console.error("🚨 SERVICE ACCOUNT JSON IS MISSING 'project_id'. Firestore will fail.");
-  }
-
   admin.initializeApp({
     credential: admin.credential.cert(serviceAccount)
   });
@@ -162,42 +134,32 @@ app.post('/api/test-match', (req, res) => {
 // Active Rooms (Source of Truth for Admin)
 const activeRooms = {}; // { roomId: { id, type, player1, player2, startTime } }
 
-// Rate Limiting Middleware
-const rateLimits = new Map(); // socketId -> { count, start }
+// Rate Limiting
+const rateLimits = {}; // { socketId: { count: 0, lastReset: Date.now() } }
 const RATE_LIMIT = 50; // Max messages per second
 
-const rateLimiter = (socket, packet, next) => {
-  const now = Date.now();
-  
-  // Initialize or Get Record
-  if (!rateLimits.has(socket.id)) {
-    rateLimits.set(socket.id, { count: 0, start: now });
-  }
-  
-  const record = rateLimits.get(socket.id);
-  
-  // Reset window if > 1 second has passed
-  if (now - record.start > 1000) {
-    record.count = 0;
-    record.start = now;
-  }
-  
-  // Increment & Check
-  record.count++;
-  
-  if (record.count > RATE_LIMIT) {
-    console.warn(`[Security] ⚡ Rate limit exceeded for ${socket.id} (${record.count}/${RATE_LIMIT})`);
-    // Optional: Emit warning to client
-    if (record.count === RATE_LIMIT + 1) {
-        socket.emit('error', { message: 'Rate limit exceeded. Slow down.' });
+const checkRateLimit = (socket) => {
+    const now = Date.now();
+    if (!rateLimits[socket.id]) {
+        rateLimits[socket.id] = { count: 1, lastReset: now };
+        return true;
     }
-    // Block the packet
-    return; 
-  }
-  
-  next();
-};
 
+    const limit = rateLimits[socket.id];
+    if (now - limit.lastReset > 1000) {
+        limit.count = 1;
+        limit.lastReset = now;
+        return true;
+    }
+
+    limit.count++;
+    if (limit.count > RATE_LIMIT) {
+        console.warn(`RATE LIMIT EXCEEDED: ${socket.id} (${limit.count} msgs/s) - DISCONNECTING`);
+        socket.disconnect();
+        return false;
+    }
+    return true;
+};
 
 // API Endpoints for Admin
 app.get('/api/rooms', (req, res) => {
@@ -235,104 +197,36 @@ app.delete('/api/rooms/:roomId', (req, res) => {
 });
 
 // Socket.IO Middleware
-// Guest Cleanup Manager
-const guestCleanupTimers = new Map(); // uid -> timeoutId
-
-const scheduleCleanup = (uid) => {
-    if (guestCleanupTimers.has(uid)) return; // Already scheduled
-
-    console.log(`[Cleanup] ⏳ Scheduling deletion for guest ${uid} in 60s`);
-    const timer = setTimeout(async () => {
-        try {
-            console.log(`[Cleanup] 🧹 Deleting guest ${uid} (Expired)`);
-            
-            // 1. Delete from Auth (if possible via Admin SDK)
-            await admin.auth().deleteUser(uid);
-            
-            // 2. Delete from Firestore
-            await admin.firestore().collection('users').doc(uid).delete();
-            
-            console.log(`[Cleanup] ✅ Guest ${uid} deleted successfully`);
-        } catch (err) {
-            console.error(`[Cleanup] ❌ Error deleting guest ${uid}:`, err);
-        } finally {
-            guestCleanupTimers.delete(uid);
-        }
-    }, 60000); // 60 seconds
-
-    guestCleanupTimers.set(uid, timer);
-};
-
-const cancelCleanup = (uid) => {
-    if (guestCleanupTimers.has(uid)) {
-        clearTimeout(guestCleanupTimers.get(uid));
-        guestCleanupTimers.delete(uid);
-        console.log(`[Cleanup] ↩️ Cancelled deletion for ${uid} (Reconnected)`);
-    }
-};
-
-// Socket.IO Middleware
-const verifySocket = async (socket, next) => {
-  try {
+io.use(async (socket, next) => {
     const token = socket.handshake.auth.token;
     
     if (!token) {
-      console.warn(`[Auth] 🛑 Rejected connection from ${socket.id}: No token`);
-      return next(new Error("Authentication error: No token"));
+        return next(new Error("Authentication error: No token provided"));
     }
 
-    // 1. Verify Token
-    const decodedToken = await admin.auth().verifyIdToken(token);
-    
-    // 2. CRITICAL CHECK: Ensure UID exists
-    if (!decodedToken || !decodedToken.uid) {
-      console.error(`[Auth] 🚨 Token verified but UID is missing!`, decodedToken);
-      return next(new Error("Authentication error: Invalid token payload"));
-    }
-
-    const uid = decodedToken.uid;
-    const isAnonymous = decodedToken.firebase.sign_in_provider === 'anonymous';
-
-    // CANCEL CLEANUP if reconnecting
-    if (isAnonymous) {
-        cancelCleanup(uid);
-    }
-
-    // 3. Fetch User Profile (Safe Query)
-    // Wrap in try/catch specifically for Firestore to isolate issues
     try {
-        const userDoc = await admin.firestore().collection('users').doc(uid).get();
-        
-        if (userDoc.exists && userDoc.data().isBanned) {
-             console.warn(`[Auth] 🚫 Banned user tried to connect: ${uid}`);
-             return next(new Error("Connection rejected: Account banned"));
+        // 1. Verify Token
+        const decodedToken = await admin.auth().verifyIdToken(token);
+        socket.user = decodedToken;
+
+        // 2. Check Ban Status (users collection)
+        // We use Admin SDK for this check
+        if (admin.apps.length > 0) {
+            const userDoc = await admin.firestore().collection('users').doc(decodedToken.uid).get();
+            if (userDoc.exists) {
+                const userData = userDoc.data();
+                if (userData.isBanned === true || userData.status === 'banned') {
+                     return next(new Error("Account banned"));
+                }
+            }
         }
         
-        // 4. Success
-        socket.user = {
-          uid: uid,
-          email: decodedToken.email,
-          username: (userDoc.exists ? userDoc.data().username : null) || 'Anonymous',
-          isAnonymous: isAnonymous
-        };
-        
         next();
-
-    } catch (dbError) {
-        console.error(`[Auth] ⚠️ Firestore check failed for ${uid}:`, dbError.message);
-        // Decide: Do we allow connection if DB fails? 
-        // For now, let's allow it but log the error so gameplay isn't blocked by a DB glitch.
-        socket.user = { uid, email: decodedToken.email, username: 'Unknown', isAnonymous: isAnonymous };
-        next();
+    } catch (err) {
+        console.error("Socket Auth Error:", err);
+        next(new Error("Authentication error"));
     }
-
-  } catch (err) {
-    console.error(`[Auth] ❌ ID Token Verification Failed for ${socket.id}:`, err.message);
-    next(new Error("Authentication error"));
-  }
-};
-
-io.use(verifySocket);
+});
 
 // Validation Middleware Wrapper
 // Validation Middleware Wrapper
@@ -354,9 +248,6 @@ const validate = (socket, schemaFn, handler) => (data) => {
 };
 
 io.on('connection', (socket) => {
-    // Apply Rate Limiter
-    socket.use((packet, next) => rateLimiter(socket, packet, next));
-
     console.log(`User Connected: ${socket.id}`);
 
     // --- VALIDATED EVENTS ---
@@ -425,7 +316,7 @@ io.on('connection', (socket) => {
 
     // JOIN QUEUE
     socket.on('join_queue', async (data) => {
-        // Rate limit handled by middleware
+        if (!checkRateLimit(socket)) return;
 
         const { queueType, user } = data;
         console.log(`User ${user.displayName} (${socket.id}) attempting to join ${queueType} queue`);
@@ -435,8 +326,7 @@ io.on('connection', (socket) => {
             // Check if username is in banned_users collection
             // Note: We use the username as the document ID for banned_users
             const username = user.displayName;
-            
-            if (username && isValidUsername(username)) {
+            if (username) {
                 const bannedRef = doc(db, 'artifacts', 'cubity-v1', 'public', 'data', 'banned_users', username.toLowerCase());
                 const bannedSnap = await getDoc(bannedRef);
 
@@ -446,15 +336,10 @@ io.on('connection', (socket) => {
                     socket.disconnect(); // Force disconnect
                     return;
                 }
-            } else {
-                console.warn(`⚠️ Skipped ban check for invalid username: "${username}"`);
-                // Optional: Reject connection if username is invalid?
-                // For now, we allow it but log warning (or maybe we should block?)
-                // If username is invalid, they shouldn't be here.
             }
         } catch (err) {
             console.error('Error checking ban status:', err);
-            // Fail open or closed? For now, log error and proceed.
+            // Fail open or closed? For now, log error and proceed, but in strict mode we might block.
         }
 
         // Remove from queue if already there to prevent duplicates
@@ -496,148 +381,66 @@ io.on('connection', (socket) => {
 
             console.log(`Match Found! Room: ${roomId} | ${p1.userData.displayName} vs ${p2.userData.displayName}`);
 
-            // Generate Scramble (Server-Side)
-            let scramble = "R U R' U' R U R' U' R U R' U'"; // Fallback
-            try {
-                const s = await randomScrambleForEvent("333");
-                scramble = s.toString();
-            } catch (e) {
-                console.error("Failed to generate scramble:", e);
-            }
-
             // Notify Players
             p1.socket.emit('match_found', { 
                 roomId, 
                 opponent: p2.userData, 
                 isHost: true,
-                scramble: scramble
+                scramble: "R U R' U' R U R' U' R U R' U'" // Generate real scramble later
             });
 
             p2.socket.emit('match_found', { 
                 roomId, 
                 opponent: p1.user, 
                 isHost: false,
-                scramble: scramble
+                scramble: "R U R' U' R U R' U' R U R' U'"
             });
         }
     });
 
     // SIGNALING (Relay WebRTC messages)
     socket.on('signal', (data) => {
-        // Rate limit handled by middleware
+        if (!checkRateLimit(socket)) return;
 
         const { roomId, signalData } = data;
         // Broadcast to everyone else in the room (which is just the opponent)
         socket.to(roomId).emit('signal', signalData);
     });
 
-    // LEAVE QUEUE
-    socket.on('leave_queue', () => {
-        const index = queue3x3.findIndex(s => s.socket.id === socket.id);
-        if (index !== -1) {
-            queue3x3.splice(index, 1);
-            console.log(`[Matchmaking] User ${socket.id} removed from queue`);
-        }
-    });
-
     // LEAVE ROOM
-    socket.on('leave_room', async (data) => {
+    socket.on('leave_room', (data) => {
         if (!checkRateLimit(socket)) return;
 
         const { roomId } = data;
         console.log(`User ${socket.id} left room ${roomId}`);
         socket.to(roomId).emit('opponent_left');
-        
-        // Force Leave
         socket.leave(roomId);
         delete socketRooms[socket.id];
         
-        // Remove from active rooms
+        // Remove from active rooms if empty or just mark as partial?
+        // For now, if anyone leaves, we consider the match over/room invalid for monitoring
         if (activeRooms[roomId]) {
-            const room = activeRooms[roomId];
-            
-            // Remove player reference
-            if (room.player1.socketId === socket.id) room.player1.socketId = null;
-            if (room.player2.socketId === socket.id) room.player2.socketId = null;
-
-            // Check if room is empty
-            const socketsInRoom = await io.in(roomId).fetchSockets();
-            if (socketsInRoom.length === 0) {
-                console.log(`[Rooms] 🗑️ Room ${roomId} deleted (Empty)`);
-                
-                // 1. Clear Intervals
-                if (room.gameInterval) clearInterval(room.gameInterval);
-                
-                // 2. Delete from Memory
-                delete activeRooms[roomId];
-                
-                // 3. Delete from Firestore
-                try {
-                    await admin.firestore().collection('artifacts').doc('cubity-v1').collection('public').doc('data').collection('rooms').doc(roomId).delete();
-                    console.log(`[Rooms] 🗑️ Room ${roomId} deleted from Firestore`);
-                } catch (err) {
-                    console.error(`[Rooms] Error deleting room ${roomId} from Firestore:`, err);
-                }
-            }
+            delete activeRooms[roomId];
         }
     });
 
     // LEAVE / DISCONNECT
-    socket.on('disconnect', async () => {
+    socket.on('disconnect', () => {
         console.log(`User Disconnected: ${socket.id}`);
-        
-        // Schedule Cleanup for Guests
-        if (socket.user && socket.user.isAnonymous) {
-            scheduleCleanup(socket.user.uid);
-        }
-
-        // Remove from Queue
-        const qIndex = queue3x3.findIndex(s => s.socket.id === socket.id);
-        if (qIndex !== -1) {
-            queue3x3.splice(qIndex, 1);
-            console.log(`[Matchmaking] User ${socket.id} removed from queue (Disconnect)`);
-        }
+        queue3x3 = queue3x3.filter(s => s.id !== socket.id);
         
         const roomId = socketRooms[socket.id];
         if (roomId) {
             console.log(`User ${socket.id} disconnected from room ${roomId}`);
             socket.to(roomId).emit('opponent_left');
-            
-            // Force Leave
-            socket.leave(roomId);
             delete socketRooms[socket.id];
             
-            // Check if room is empty
-            const socketsInRoom = await io.in(roomId).fetchSockets();
-            if (socketsInRoom.length === 0) {
-                if (activeRooms[roomId]) {
-                    const room = activeRooms[roomId];
-                    console.log(`[Rooms] 🗑️ Room ${roomId} deleted (Empty/Disconnect)`);
-                    
-                    // 1. Clear Intervals
-                    if (room.gameInterval) clearInterval(room.gameInterval);
-
-                    // 2. Delete from Memory
-                    delete activeRooms[roomId];
-                    
-                    // 3. Delete from Firestore
-                    try {
-                        await admin.firestore().collection('artifacts').doc('cubity-v1').collection('public').doc('data').collection('rooms').doc(roomId).delete();
-                        console.log(`[Rooms] 🗑️ Room ${roomId} deleted from Firestore`);
-                    } catch (err) {
-                        console.error(`[Rooms] Error deleting room ${roomId} from Firestore:`, err);
-                    }
-                }
-            } else {
-                 // If room not empty, nullify player ref
-                 if (activeRooms[roomId]) {
-                    const room = activeRooms[roomId];
-                    if (room.player1.socketId === socket.id) room.player1.socketId = null;
-                    if (room.player2.socketId === socket.id) room.player2.socketId = null;
-                 }
+            // Remove from active rooms
+            if (activeRooms[roomId]) {
+                delete activeRooms[roomId];
             }
         }
-        rateLimits.delete(socket.id);
+        delete rateLimits[socket.id];
     });
 });
 
