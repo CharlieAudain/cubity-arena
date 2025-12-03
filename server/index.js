@@ -34,8 +34,26 @@ import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 
 // Initialize Firebase Admin
-// Load the key
-const serviceAccount = require("./service-account.json");
+let serviceAccount;
+
+try {
+  // Try to load from file (Local Development)
+  serviceAccount = require("./service-account.json");
+} catch (e) {
+  // Fallback to Environment Variable (Production/Container)
+  if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+    try {
+      serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+    } catch (parseError) {
+      console.error("❌ Failed to parse FIREBASE_SERVICE_ACCOUNT environment variable");
+      process.exit(1);
+    }
+  } else {
+    console.error("❌ service-account.json not found and FIREBASE_SERVICE_ACCOUNT not set");
+    console.error("   Please ensure you have either the file or the environment variable configured.");
+    process.exit(1);
+  }
+}
 
 // Initialize the Admin SDK
 if (admin.apps.length === 0) {
