@@ -2,7 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased] - 2025-12-01
+## [0.2.0] - 2025-12-03
+
+### Public Launch & Universal Hardware
+This release introduces the public landing page and confirms universal support for all major smart cubes.
+
+#### 🚀 New Features
+- **Public Landing Page**: A full-screen, responsive landing page with "Continue with Google" and "Log In / Sign Up" options.
+- **Universal Driver Support**: Confirmed support for GAN, Moyu, QiYi, and GoCube devices via a unified driver architecture.
+- **Branding**: Added Cubity Arena logo and updated Discord invite links.
+
+#### 🔧 Fixes & Improvements
+- **CORS Configuration**: Enforced strict origin checks in production while allowing flexibility in development.
+- **Mobile Experience**: Improved responsive layout for authentication buttons on mobile devices.
+- **Navigation**: Conditionally hid app navigation for non-logged-in users.
+
+## [0.1.0] - 2025-12-01
 
 ### Security Blitz & Scramble Fix
 This release focuses on hardening the application security, ensuring competitive integrity with WCA-compliant scrambles, and cleaning up the codebase for production.
