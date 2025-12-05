@@ -86,7 +86,13 @@ export default function LandingPage({ onGoogleLogin, onEmailLogin }: { onGoogleL
   );
 }
 
-function FeatureCard({ icon, title, desc }) {
+interface FeatureCardProps {
+  icon: React.ReactNode;
+  title: string;
+  desc: string;
+}
+
+function FeatureCard({ icon, title, desc }: FeatureCardProps) {
   return (
     <div className="p-8 bg-slate-900/40 border border-white/5 rounded-3xl hover:bg-slate-900/60 hover:border-indigo-500/30 transition-all duration-300 group text-left">
       <div className="text-indigo-400 mb-6 bg-indigo-500/10 w-16 h-16 rounded-2xl flex items-center justify-center group-hover:scale-110 group-hover:bg-indigo-500/20 transition-all duration-300">{icon}</div>
