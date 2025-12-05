@@ -542,11 +542,7 @@ export class GanDriver extends SmartDevice {
     const mode = decrypted[0];
     
     if (mode === 1) { // Move
-      // V2 Move Packet might be similar to V4 but with different header
-      // V4: Mode(1) | ...
-      // Let's try to parse as move
-      const bits = this.toBitString(decrypted);
-      this.handleMovePacket(decrypted, bits);
+      this.handleMovePacketV2(decrypted);
     } else if (mode === 4) { // Facelets
       // Try to parse using V4 logic (compressed format)
       // V4 expects mode 0xED, but V2 sends mode 4.
@@ -576,7 +572,7 @@ export class GanDriver extends SmartDevice {
     const mode = parseInt(bits.slice(0, 8), 2);
 
     if (mode === 1) { // Move
-      this.handleMovePacket(decrypted, bits);
+      this.handleMovePacketV3(decrypted);
     } else if (mode === 2) { // Facelets (V3 uses opcode 2?)
       // Try parsing
       try {
@@ -599,6 +595,9 @@ export class GanDriver extends SmartDevice {
   /**
    * Handle move packet (0x01)
    */
+  /**
+   * Handle move packet (0x01)
+   */
   private handleMovePacket(decrypted: Uint8Array, bits: string): void {
     const moveCnt = parseInt(bits.slice(56, 64) + bits.slice(48, 56), 2);
     
@@ -613,8 +612,6 @@ export class GanDriver extends SmartDevice {
     );
 
     if (moveCnt === this.prevMoveCnt || this.prevMoveCnt === -1) {
-      // Even if moveCnt is same, we might want to update timestamp? 
-      // But usually we ignore duplicates.
       if (this.prevMoveCnt === -1) this.prevMoveCnt = moveCnt;
       return;
     }
@@ -637,6 +634,79 @@ export class GanDriver extends SmartDevice {
     // Add to buffer and process
     this.moveBuffer.push({ move, moveCnt, timestamp: Date.now() });
     this.processMoveBuffer();
+  }
+
+  private handleMovePacketV2(decrypted: Uint8Array): void {
+    // V2 Move Packet Structure (Best Effort)
+    // Byte 0: Mode (1)
+    // Byte 1-2: Move Count?
+    // Byte 13: Move Code?
+    
+    // Logging for debug
+    // Logger.log('GanDriver', 'V2 Move Raw:', Array.from(decrypted).map(b => b.toString(16).padStart(2, '0')).join(' '));
+
+    // Guessing offsets based on similar protocols
+    const moveCnt = (decrypted[1] << 8) | decrypted[2]; // Big Endian?
+    const val = decrypted[13]; // Move code?
+
+    if (moveCnt === this.prevMoveCnt || this.prevMoveCnt === -1) {
+        if (this.prevMoveCnt === -1) this.prevMoveCnt = moveCnt;
+        return;
+    }
+
+    // V2 Move Map (Standard GAN/GoCube mapping usually)
+    // 0-17: U, U', U2, R, R', R2, F, F', F2, D, D', D2, L, L', L2, B, B', B2
+    const moveMap = [
+        "U", "U'", "U2",
+        "R", "R'", "R2",
+        "F", "F'", "F2",
+        "D", "D'", "D2",
+        "L", "L'", "L2",
+        "B", "B'", "B2"
+    ];
+
+    const move = moveMap[val];
+    if (!move) {
+        Logger.warn('GanDriver', `Unknown V2 Move Code: ${val}`);
+        return;
+    }
+
+    Logger.log('GanDriver', `V2 Move: ${move} (Cnt: ${moveCnt})`);
+    this.moveBuffer.push({ move, moveCnt, timestamp: Date.now() });
+    this.processMoveBuffer();
+  }
+
+  private handleMovePacketV3(decrypted: Uint8Array): void {
+      // V3 Move Packet Structure
+      // Similar to V2?
+      // Logger.log('GanDriver', 'V3 Move Raw:', Array.from(decrypted).map(b => b.toString(16).padStart(2, '0')).join(' '));
+
+      const moveCnt = (decrypted[1] << 8) | decrypted[2];
+      const val = decrypted[13]; 
+
+      if (moveCnt === this.prevMoveCnt || this.prevMoveCnt === -1) {
+          if (this.prevMoveCnt === -1) this.prevMoveCnt = moveCnt;
+          return;
+      }
+
+      const moveMap = [
+          "U", "U'", "U2",
+          "R", "R'", "R2",
+          "F", "F'", "F2",
+          "D", "D'", "D2",
+          "L", "L'", "L2",
+          "B", "B'", "B2"
+      ];
+
+      const move = moveMap[val];
+      if (!move) {
+          Logger.warn('GanDriver', `Unknown V3 Move Code: ${val}`);
+          return;
+      }
+
+      Logger.log('GanDriver', `V3 Move: ${move} (Cnt: ${moveCnt})`);
+      this.moveBuffer.push({ move, moveCnt, timestamp: Date.now() });
+      this.processMoveBuffer();
   }
 
   /**
