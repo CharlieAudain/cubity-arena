@@ -90,8 +90,8 @@ export const useMatchmaking = (user) => {
             queueType, 
             user: { 
                 uid: user.uid, 
-                displayName: user.displayName, 
-                elo: user.elo || 800 
+                displayName: userData?.displayName || user.displayName, 
+                elo: userData?.elo || 800 
             } 
         });
     };
