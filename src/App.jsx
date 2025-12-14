@@ -78,6 +78,25 @@ export default function App() {
     }
   }, [user]);
 
+  // Handle Real-Time User Stats Update
+  useEffect(() => {
+    if (!socket || !user) return;
+
+    const handleUpdateStats = (data) => {
+        // data: { [uid]: newElo, ... }
+        if (data[user.uid]) {
+            console.log(`[App] Stats Updated: ELO ${data[user.uid]}`);
+            setUserData(prev => {
+                if (!prev) return prev;
+                return { ...prev, elo: data[user.uid] };
+            });
+        }
+    };
+
+    socket.on('update_user_stats', handleUpdateStats);
+    return () => socket.off('update_user_stats', handleUpdateStats);
+  }, [user]);
+
   useEffect(() => {
     Logger.init();
   }, []);

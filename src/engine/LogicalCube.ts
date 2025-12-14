@@ -1,4 +1,4 @@
-import mathlib from '../lib/cstimer/mathlib.js';
+import mathlib from '../lib/maths/mathlib.js';
 import { getInverseMove, simplifyMoveStack } from '../utils/cube.ts';
 
 // Extract CubieCube class and type from the default export

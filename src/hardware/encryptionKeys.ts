@@ -11,8 +11,6 @@
 
 /**
  * GAN Cube Encryption Keys (Compressed)
- * 
- * These are the LZ-compressed base keys from cstimer.
  * They must be decompressed using LZString before use.
  */
 export const GAN_KEYS = [

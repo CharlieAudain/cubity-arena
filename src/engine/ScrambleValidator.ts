@@ -7,7 +7,7 @@
  * 3. Implement "Auto-Homing" (Drift Check) to fix orientation issues.
  */
 
-import mathlib from '../lib/cstimer/mathlib';
+import mathlib from '../lib/maths/mathlib';
 import { LogicalCube } from './LogicalCube';
 
 // Extract CubieCube
@@ -36,7 +36,7 @@ export class ScrambleValidator {
         this.targetState = new CubieCube();
         
         // Apply scramble moves to a solved cube to get target state
-        // Note: cstimer uses getConjMoves and parseScramble, but we can just apply moves if standard.
+       
         const moves = scramble.split(/\s+/);
         for (const move of moves) {
             if (!move) continue;

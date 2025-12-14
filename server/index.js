@@ -555,7 +555,7 @@ io.on('connection', (socket) => {
             ]);
 
             // 5. Emit New Ratings
-            io.to(roomId).emit('new_ratings', {
+            io.to(roomId).emit('update_user_stats', {
                 [room.player1.id]: newRatingA,
                 [room.player2.id]: newRatingB
             });

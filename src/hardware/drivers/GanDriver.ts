@@ -9,7 +9,7 @@ import { LogicalCube } from '../../engine/LogicalCube';
 import LZString from 'lz-string';
 // @ts-ignore
 import * as aesjs from 'aes-js';
-import mathlib from '../../lib/cstimer/mathlib';
+import mathlib from '../../lib/maths/mathlib';
 import { GAN_KEYS, parseMacAddress, deriveKey } from '../encryptionKeys';
 import { Logger } from '../../utils/Logger';
 
