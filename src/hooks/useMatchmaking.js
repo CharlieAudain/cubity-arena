@@ -3,7 +3,7 @@ import { useSocket } from './useSocket';
 import { auth } from '../lib/firebase';
 import { signOut } from 'firebase/auth';
 
-export const useMatchmaking = (user) => {
+export const useMatchmaking = (user, userData) => {
     const [status, setStatus] = useState('idle'); // idle, searching, found
     const [roomId, setRoomId] = useState(null);
     const [roomData, setRoomData] = useState(null);
