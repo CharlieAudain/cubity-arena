@@ -20,15 +20,17 @@ const BattleRoom = ({ user, userData, roomData, roomId, onExit, smartCube }) => 
 
     // Determine Host Status (Prefer explicit flag from server, fallback to UID check)
     const amIPlayer1 = roomData.isHost !== undefined ? roomData.isHost : (user.uid === roomData.player1.uid);
+    const opponent = amIPlayer1 ? roomData.player2 : roomData.player1;
+
     const [opponentName, setOpponentName] = useState(
-        amIPlayer1 
-        ? (roomData.player2?.displayName || roomData.player2?.name) 
-        : (roomData.player1?.displayName || roomData.player1?.name)
+        opponent?.displayName || opponent?.name
     );
 
     const socket = useSocket();
     const lastOpTimestamp = useRef(0);
     const solutionMoves = useRef([]); // Track moves for reconstruction
+    
+
 
     // WebRTC Integration
     const { status: rtcStatus, sendMessage: sendRtcMessage, lastMessage: rtcMessage } = useWebRTC(roomId, user.uid, amIPlayer1);
@@ -297,7 +299,7 @@ const BattleRoom = ({ user, userData, roomData, roomId, onExit, smartCube }) => 
                         <div className="text-white font-bold text-lg">{opponentName || 'Connecting...'}</div>
                         <div className="text-xs font-mono text-slate-400 flex items-center gap-1">
                             <Crown className="w-3 h-3" /> 
-                            {roomData.player2?.elo || 800} ELO
+                            {opponent?.elo || 800} ELO
                         </div>
                     </div>
                 </div>
