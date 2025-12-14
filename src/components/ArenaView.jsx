@@ -11,7 +11,7 @@ const blurOnUI = (e) => {
 
 import BattleRoom from './BattleRoom';
 
-const ArenaView = ({ user, smartCube, isAdmin }) => {
+const ArenaView = ({ user, userData, smartCube, isAdmin }) => {
   const { status, roomId, roomData, findMatch, cancelSearch, error } = useMatchmaking(user);
 
   const [debugRoom, setDebugRoom] = useState(null);

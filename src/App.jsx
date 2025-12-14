@@ -59,16 +59,12 @@ export default function App() {
   // SOCKET CONNECTION (Auth Protected)
   useEffect(() => {
     if (user) {
-        // Get fresh token and connect
-        user.getIdToken().then(token => {
-            socket.auth = { token };
-            if (!socket.connected) {
-                console.log("[App] Connecting socket with token...");
-                socket.connect();
-            }
-        }).catch(err => {
-            console.error("[App] Failed to get token for socket:", err);
-        });
+        // Connect if not already connected
+        // The socket now handles token refresh internally via the `auth` callback
+        if (!socket.connected) {
+            console.log("[App] Connecting socket...");
+            socket.connect();
+        }
     } else {
         // Disconnect if logged out
         if (socket.connected) {
@@ -852,6 +848,20 @@ export default function App() {
           <NavIcon icon={Settings} label="Settings" active={activeTab === 'more'} onClick={() => setActiveTab('more')} />
         </nav>
       )}
+
+      {/* Tab Content */}
+      <div className="pb-24 md:pb-0">
+        {activeTab === 'timer' && (
+          <TimerView 
+            user={user} 
+            userData={userData} 
+            smartCube={smartCube} 
+            recentSolves={recentSolves}
+          />
+        )}
+
+        {activeTab === 'arena' && <ArenaView user={user} userData={userData} smartCube={smartCube} isAdmin={isAdmin} />}
+      </div>
 
       {/* Email/Password Auth Modal */}
       {showEmailAuth && (

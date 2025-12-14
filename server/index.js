@@ -511,18 +511,55 @@ io.on('connection', (socket) => {
         if (!checkRateLimit(socket)) return;
 
         const { roomId, winnerId } = data;
-        const room = activeRooms[roomId];
-
-        if (!room) {
-            // Room might have been cleaned up already
-            return;
+        
+        // --- DEBUG ROOM HANDLING ---
+        if (roomId.startsWith('debug-room')) {
+             console.log(`[DEBUG] Processing match for ${roomId}`);
+             // Just mirror the update back to the sender for testing
+             // We can't update both if one is fake.
+             // We'll update only the sender (socket.user)
+             const senderUser = socketToUserMap[socket.id];
+             if (senderUser) {
+                 // Fetch actual current Elo
+                 const userRef = doc(db, 'users', senderUser.uid);
+                 const userSnap = await getDoc(userRef);
+                 if (userSnap.exists()) {
+                     const currentElo = userSnap.data().elo || 800;
+                     const opponentElo = 800;
+                     // Assume we are Player 1
+                     let score = 0.5;
+                     if (winnerId === senderUser.uid) score = 1;
+                     else if (winnerId !== 'DRAW') score = 0;
+                     
+                     const { newRatingA } = calculateEloChange(currentElo, opponentElo, score);
+                     await updateDoc(userRef, { elo: newRatingA });
+                     
+                     socket.emit('update_user_stats', {
+                         [senderUser.uid]: newRatingA
+                     });
+                     console.log(`[DEBUG] Updated Elo for ${senderUser.displayName}: ${currentElo} -> ${newRatingA}`);
+                 }
+             }
+             return;
         }
 
-        try {
-            // 1. Fetch Players from DB
-            const user1Ref = doc(db, 'users', room.player1.id);
-            const user2Ref = doc(db, 'users', room.player2.id);
+        const room = activeRooms[roomId];
 
+        if (!room) return;
+        if (room.processed) return; // Idempotency check
+
+        try {
+            room.processed = true; // Mark as processed immediately
+
+            // 1. Fetch Players from DB
+            const user1Ref = doc(db, 'artifacts', 'cubity-v1', 'users', room.player1.id, 'profile', 'main'); 
+            const user2Ref = doc(db, 'artifacts', 'cubity-v1', 'users', room.player2.id, 'profile', 'main');
+            // Note: DB path was 'users' in original code, but App.jsx uses 'artifacts/cubity-v1/users/.../profile/main'
+            // We MUST fix this path matching!
+            // Looking at App.jsx (Step 14483, line 105): 
+            // doc(db, 'artifacts', 'cubity-v1', 'users', currentUser.uid, 'profile', 'main');
+            // The original server code used 'users' root collection. This is WRONG if we want to sync.
+            
             const [user1Snap, user2Snap] = await Promise.all([
                 getDoc(user1Ref),
                 getDoc(user2Ref)
@@ -553,16 +590,24 @@ io.on('connection', (socket) => {
                 updateDoc(user1Ref, { elo: newRatingA }),
                 updateDoc(user2Ref, { elo: newRatingB })
             ]);
+            
+            console.log(`[MATCH] ${roomId} Finished. Elo Update: ${user1Data.displayName} (${rating1}->${newRatingA}) vs ${user2Data.displayName} (${rating2}->${newRatingB})`);
 
             // 5. Emit New Ratings
             io.to(roomId).emit('update_user_stats', {
                 [room.player1.id]: newRatingA,
                 [room.player2.id]: newRatingB
             });
+            
+            // Clean up room after delay
+            setTimeout(() => {
+                delete activeRooms[roomId];
+            }, 5000);
 
         } catch (err) {
             console.error('Error updating Elo ratings:', err);
             socket.emit('error', { message: 'Failed to update match results.' });
+            room.processed = false; // Revert if failed
         }
     });
 });

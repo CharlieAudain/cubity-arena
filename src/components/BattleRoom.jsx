@@ -9,7 +9,7 @@ import { useSocket } from '../hooks/useSocket';
 import { doc, deleteDoc, setDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 
-const BattleRoom = ({ user, roomData, roomId, onExit, smartCube }) => {
+const BattleRoom = ({ user, userData, roomData, roomId, onExit, smartCube }) => {
     const [myTime, setMyTime] = useState(null);
     const [opponentTime, setOpponentTime] = useState(null);
     const [result, setResult] = useState(null); 
@@ -113,13 +113,26 @@ const BattleRoom = ({ user, roomData, roomId, onExit, smartCube }) => {
     }, [rtcMessage]);
 
     // Check for Result
+    // Check for Result & Emit to Server (Host Only)
     useEffect(() => {
-        if (myTime && opponentTime) {
-            if (myTime < opponentTime) setResult('win');
-            else if (myTime > opponentTime) setResult('loss');
-            else setResult('draw');
+        if (myTime && opponentTime && !result) {
+            let cx = 'draw';
+            if (myTime < opponentTime) cx = 'win';
+            else if (myTime > opponentTime) cx = 'loss';
+            
+            setResult(cx); 
+
+            // Host handles the official reporting
+            if (amIPlayer1 && socket) {
+                let winnerId = 'DRAW';
+                if (cx === 'win') winnerId = user.uid;
+                else if (cx === 'loss') winnerId = roomData.player2?.uid || 'opponent';
+                
+                console.log(`[BattleRoom] Match Finished. Reporting result: ${cx} (Winner: ${winnerId})`);
+                socket.emit('match_finished', { roomId, winnerId });
+            }
         }
-    }, [myTime, opponentTime]);
+    }, [myTime, opponentTime, result, amIPlayer1, socket, user.uid, roomData.player2?.uid, roomId]);
 
     // Handle My Moves -> Sync via WebRTC AND Socket
     // Subscribe to LogicalCube updates directly
@@ -237,7 +250,7 @@ const BattleRoom = ({ user, roomData, roomId, onExit, smartCube }) => {
                         <div className="text-white font-bold text-lg">{user.displayName || 'Guest'}</div>
                         <div className="text-xs font-mono text-yellow-500 flex items-center justify-end gap-1">
                             <Crown className="w-3 h-3" /> 
-                            {user.elo || 800} ELO
+                            {userData?.elo || user.elo || 800} ELO
                         </div>
                     </div>
                 </div>
