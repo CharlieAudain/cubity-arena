@@ -520,7 +520,7 @@ export default function App() {
         </div>
       </header>
 
-      <main className="pt-24 px-4 max-w-4xl mx-auto">
+      <main className="pt-24 px-4 max-w-4xl mx-auto pb-24 md:pb-0">
         {error && <div className="mb-6 p-4 bg-red-900/20 border border-red-500/20 rounded-xl text-red-400">{error}</div>}
         {smartCube.error && <div className="mb-6 p-4 bg-orange-900/20 border border-orange-500/20 rounded-xl text-orange-400 flex items-center gap-2"><AlertCircle className="w-4 h-4"/> {smartCube.error}</div>}
 
@@ -851,16 +851,7 @@ export default function App() {
 
       {/* Tab Content */}
       <div className="pb-24 md:pb-0">
-        {activeTab === 'timer' && (
-          <TimerView 
-            user={user} 
-            userData={userData} 
-            smartCube={smartCube} 
-            recentSolves={recentSolves}
-          />
-        )}
-
-        {activeTab === 'arena' && <ArenaView user={user} userData={userData} smartCube={smartCube} isAdmin={isAdmin} />}
+        {/* Mobile Tab Spacing Wrapper (Empty if handled above) */}
       </div>
 
       {/* Email/Password Auth Modal */}
