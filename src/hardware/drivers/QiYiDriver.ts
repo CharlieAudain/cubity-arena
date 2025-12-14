@@ -1,14 +1,14 @@
 import { SmartDevice } from '../SmartDevice';
 import { LogicalCube } from '../../engine/LogicalCube';
 import { ConnectionStatus } from '../types';
-import aesjs from 'aes-js';
-import LZString from 'lz-string';
+// @ts-ignore
+import * as aesjs from 'aes-js';
+import { QIYI_ENCRYPTION_KEYS } from '../encryptionKeys';
 
 const UUID_SUFFIX = '-0000-1000-8000-00805f9b34fb';
 const SERVICE_UUID = '0000fff0' + UUID_SUFFIX;
 const CHRCT_UUID_CUBE = '0000fff6' + UUID_SUFFIX;
 
-const KEY_COMPRESSED = 'NoDg7ANAjGkEwBYCc0xQnADAVgkzGAzHNAGyRTanQi5QIFyHrjQMQgsC6QA';
 
 export class QiYiDriver extends SmartDevice {
   private service: BluetoothRemoteGATTService | null = null;
@@ -25,7 +25,7 @@ export class QiYiDriver extends SmartDevice {
     this.device = device;
     if (!device.gatt) throw new Error('No GATT server');
 
-    console.log('[QiYiDriver] Connecting...');
+
     const server = await device.gatt.connect();
     const services = await server.getPrimaryServices();
     const serviceUUIDs = services.map(s => s.uuid);
@@ -36,14 +36,14 @@ export class QiYiDriver extends SmartDevice {
   async attach(device: BluetoothDevice, server: BluetoothRemoteGATTServer, serviceUUIDs: string[]): Promise<void> {
     this.device = device;
     
-    console.log('[QiYiDriver] Getting Service...');
+   
     this.service = await server.getPrimaryService(SERVICE_UUID);
     
-    console.log('[QiYiDriver] Getting Characteristic...');
+   
     this.characteristic = await this.service.getCharacteristic(CHRCT_UUID_CUBE);
 
     // Setup Encryption
-    const key = JSON.parse(LZString.decompressFromEncodedURIComponent(KEY_COMPRESSED));
+    const key = QIYI_ENCRYPTION_KEYS[0];
     this.aesEcb = new aesjs.ModeOfOperation.ecb(key);
 
     await this.characteristic.startNotifications();
@@ -56,7 +56,7 @@ export class QiYiDriver extends SmartDevice {
     this.deviceName = device.name || 'QiYi Cube';
     this.status = ConnectionStatus.CONNECTED;
     this.emit('status', ConnectionStatus.CONNECTED);
-    console.log('[QiYiDriver] Connected!');
+   
   }
 
   async disconnect(): Promise<void> {
@@ -163,9 +163,9 @@ export class QiYiDriver extends SmartDevice {
       const target = event.target as BluetoothRemoteGATTCharacteristic;
       const value = new Uint8Array(target.value!.buffer);
       
+      // Decrypt
       if (!this.aesEcb) return;
 
-      // Decrypt
       const msg = new Uint8Array(value.length);
       for (let i = 0; i < value.length; i += 16) {
           const block = value.slice(i, i + 16);
@@ -174,26 +174,10 @@ export class QiYiDriver extends SmartDevice {
       }
 
       // Parse
-      const len = msg[1]; // Wait, msg[1] is length?
-      // cstimer: msg = msg.slice(0, msg[1])
-      // msg[0] is 0xFE.
-      // msg[1] is total length.
-      
-      const validMsg = msg.slice(0, len); // Use slice of Uint8Array
+      const len = msg[1];
+      const validMsg = msg.slice(0, len);
       
       // CRC check
-      // cstimer: crc16modbus(msg) != 0
-      // If CRC is included, CRC of whole msg should be 0?
-      // Or CRC matches last 2 bytes?
-      // cstimer: msg.push(crc & 0xff, crc >> 8).
-      // So CRC is at end.
-      // If we calc CRC of whole msg including CRC bytes, it should be 0?
-      // Standard Modbus CRC property: CRC(Message + CRC) == 0.
-      
-      // cstimer: if (crc16modbus(msg) != 0) error.
-      // So yes.
-      
-      // Convert Uint8Array to number[] for CRC function
       if (this.crc16modbus(Array.from(validMsg)) !== 0) {
           console.warn('[QiYiDriver] CRC Error');
           return;
@@ -205,50 +189,16 @@ export class QiYiDriver extends SmartDevice {
       if (opcode === 0x02) { // Hello
           const battery = validMsg[35];
           this.emit('battery', battery);
-          // Send ACK? cstimer: sendMessage(msg.slice(2, 7))
-          // msg.slice(2, 7) is opcode + TS.
-          this.sendMessage(Array.from(validMsg.slice(2, 7)));
+          this.sendMessage(Array.from(validMsg.slice(2, 7))); // ACK
           
-          // Parse Facelets
-          // msg.slice(7, 34)
-          // ...
       } else if (opcode === 0x03) { // State Change
-          this.sendMessage(Array.from(validMsg.slice(2, 7)));
+          this.sendMessage(Array.from(validMsg.slice(2, 7))); // ACK
           
           // Parse Moves
-          // cstimer: todoMoves.
-          // off = 91 - 5 * todoMoves.length
-          // Wait, msg length is fixed?
-          // cstimer: msg is decrypted block.
-          // msg[1] is length.
-          // But msg seems to be large buffer?
-          // "var off = 91 - 5 * todoMoves.length"
-          // This implies msg is at least 91 bytes?
-          // But validMsg is sliced by len.
-          
-          // cstimer uses `msg` (the full decrypted buffer?) or `msg` (sliced)?
-          // "msg = msg.slice(0, msg[1])"
-          // So `msg` is sliced.
-          // If `msg` is short, `off` will be out of bounds?
-          // Maybe `msg` is always 96 bytes? (6 blocks of 16).
-          
-          // Let's assume `msg` is the full buffer for move parsing?
-          // No, cstimer uses `msg` which is sliced.
-          // So `msg` MUST be long enough.
-          
-          // Parse moves loop
-          // ...
-          
-          // Simplified move parsing:
-          // Just take the latest move?
-          // msg[34] is latest move?
-          // "var todoMoves = [[msg[34], ts]];"
-          // Yes.
-          
+          // Taking the latest move from the packet.
           const latestMoveVal = validMsg[34];
           const axis = [4, 1, 3, 0, 2, 5][(latestMoveVal - 1) >> 1];
           const power = latestMoveVal & 1; // 0 or 1
-          // cstimer: [0, 2][power] -> 0=" ", 2="'"
           
           const suffix = power === 0 ? "" : "'";
           const move = "URFDLB".charAt(axis) + suffix;

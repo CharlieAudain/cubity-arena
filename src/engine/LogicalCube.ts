@@ -10,9 +10,6 @@ type Listener = (data: any) => void;
 /**
  * LogicalCube Engine
  * 
- * Maintains the authoritative state of the cube using mathlib.js (from cstimer).
- * This ensures our state tracking matches the verification logic in bluetoothutil.js.
- * 
  * Uses mathlib.CubieCube and CubeMult for 100% accurate move application.
  */
 export class LogicalCube {
@@ -98,7 +95,7 @@ export class LogicalCube {
         
         // 3. Store target facelets
         this.targetFacelets = tempCube.toFaceCube();
-        console.log(`[LogicalCube] 🎯 Target Scramble Set: ${this.targetFacelets}`);
+       
     }
 
     /**
@@ -156,18 +153,18 @@ export class LogicalCube {
 
         // SCRAMBLE TRACKING:
         if (this.scrambleMoves.length > 0) {
-            console.log(`[LogicalCube] Scramble Track: Move=${moveStr}, Index=${this.progressIndex}, Expected=${this.scrambleMoves[this.progressIndex]}`);
+            
             
             // 1. Check Correction (Undo) or Wrong Move Accumulation
             if (this.wrongMoves.length > 0) {
                 this.wrongMoves = simplifyMoveStack(this.wrongMoves, moveStr);
-                console.log(`[LogicalCube]   -> Wrong Moves Stack: ${this.wrongMoves.join(' ')}`);
+               
                 // If stack becomes empty, we are back on track!
             } 
             // 2. Check Partial Move Progress
             else if (this.partialMove) {
                 const combined = simplifyMoveStack([this.partialMove], moveStr);
-                console.log(`[LogicalCube]   -> Partial Combine: ${this.partialMove} + ${moveStr} = ${combined.join(' ')}`);
+               
                 
                 if (combined.length === 0) {
                     // Cancelled (e.g. R then R')
@@ -178,7 +175,7 @@ export class LogicalCube {
                          // Completed the double move!
                          this.progressIndex++;
                          this.partialMove = null;
-                         console.log(`[LogicalCube]   -> Partial Completed! Next Index=${this.progressIndex}`);
+                         
                     } else {
                          // Still partial? 
                          // Only if it's a valid partial for the target.
@@ -190,19 +187,19 @@ export class LogicalCube {
                          const target = this.scrambleMoves[this.progressIndex];
                          if (target.includes("2") && res[0] === target[0] && !res.includes("2")) {
                              this.partialMove = res;
-                             console.log(`[LogicalCube]   -> Still Partial: ${res}`);
+                            
                          } else {
                              // Wrong!
                              this.wrongMoves = combined;
                              this.partialMove = null;
-                             console.log(`[LogicalCube]   -> Partial Failed -> Wrong: ${this.wrongMoves.join(' ')}`);
+                            
                          }
                     }
                 } else {
                     // Became multiple moves (e.g. R then U) -> Wrong
                     this.wrongMoves = combined;
                     this.partialMove = null;
-                    console.log(`[LogicalCube]   -> Partial Broken -> Wrong: ${this.wrongMoves.join(' ')}`);
+                   
                 }
             }
             // 3. Check New Move Progress
@@ -213,20 +210,20 @@ export class LogicalCube {
                     if (moveStr === expected) {
                         // Exact match
                         this.progressIndex++;
-                        console.log(`[LogicalCube]   -> Match! Next Index=${this.progressIndex}`);
+                       
                     } else if (expected.includes("2") && moveStr[0] === expected[0] && !moveStr.includes("2")) {
                         // Partial match (e.g. R for R2)
                         this.partialMove = moveStr;
-                        console.log(`[LogicalCube]   -> Partial Start: ${moveStr} (Target: ${expected})`);
+                       
                     } else {
                         // Wrong move
                         this.wrongMoves.push(moveStr);
-                        console.log(`[LogicalCube]   -> Wrong Move: ${moveStr} (Expected: ${expected})`);
+                        
                     }
                 } else {
                     // Scramble done, extra move
                     this.wrongMoves.push(moveStr);
-                    console.log(`[LogicalCube]   -> Extra Move: ${moveStr}`);
+                   
                 }
             }
             
@@ -329,10 +326,9 @@ export class LogicalCube {
             console.log('[LogicalCube] 🔄 Syncing raw state (preserving anchor).');
         }
         */
-        console.log('[LogicalCube] 🔄 Syncing raw state (Absolute Mode).');
+       
         
-        // 3. Update UI (Emit reset to snap visualizer)
-        // 3. Update UI (Emit reset to snap visualizer)
+
         // 3. Update UI (Emit reset to snap visualizer)
         const temp = new CubieCube();
         CubieCube.CubeMult(this.anchorInv, this.rawState, temp);
@@ -353,7 +349,7 @@ export class LogicalCube {
      * Sets the anchor to the current raw state.
      */
     public recenter() {
-        console.log('[LogicalCube] 🎯 Recentering (Setting current state as Solved).');
+       
         this.anchorInv = new CubieCube();
         this.anchorInv.invFrom(this.rawState);
         
@@ -379,7 +375,7 @@ export class LogicalCube {
             for (let j = 1; j < 9; j++) {
                 if (face[j] !== first) {
                     // DEBUG: Log why it failed
-                    console.log(`[LogicalCube] Not Solved: Face ${i/9} has mixed colors: ${face}`);
+                    
                     return false;
                 }
             }
@@ -402,9 +398,9 @@ export class LogicalCube {
         // DEBUG: Log facelets to see why it's not matching
         const solved = this.isSolved(facelets);
         if (solved) {
-             console.log(`[LogicalCube] ✅ SOLVED DETECTED!`);
+             
         } else {
-             console.log(`[LogicalCube] State: ${facelets}`);
+            
         }
         
         // Emit to listeners

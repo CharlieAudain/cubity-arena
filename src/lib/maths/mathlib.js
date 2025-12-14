@@ -1,5 +1,6 @@
 import isaac from './isaac.js';
 
+// Credits: inspired by cstimer
 const DEBUG = false;
 
 const mathlib = (function() {

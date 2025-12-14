@@ -50,7 +50,7 @@ export const useWebRTC = (roomId, userId, isHost) => {
 
         const initializePeer = async () => {
             setStatus('CONNECTING');
-            console.log(`[WebRTC] Initializing as ${isHost ? 'HOST' : 'GUEST'}`);
+          
 
             const peer = new RTCPeerConnection(ICE_SERVERS);
             peerRef.current = peer;
@@ -66,7 +66,7 @@ export const useWebRTC = (roomId, userId, isHost) => {
             };
 
             peer.onconnectionstatechange = async () => {
-                console.log("[WebRTC] Connection State:", peer.connectionState);
+               
                 if (peer.connectionState === 'connected') {
                     const isSecure = await verifyEncryption(peer);
                     if (isSecure) {
@@ -112,11 +112,9 @@ export const useWebRTC = (roomId, userId, isHost) => {
             try {
                 if (data.type === 'ready') {
                     if (!isHost) return;
-                    console.log("[WebRTC] Received Ready from Guest -> Sending Offer");
                     
-                    // Create and Send Offer (Idempotent-ish, or check if already doing it)
-                    // For simplicity, we can recreate or just resend if we stored it.
-                    // Let's just create a new one to be safe and fresh.
+                    
+                    // Create and Send Offer 
                     // Check if we already have a stable connection? 
                     if (peer.signalingState === 'stable' && peer.connectionState === 'connected') return;
 
@@ -129,7 +127,7 @@ export const useWebRTC = (roomId, userId, isHost) => {
 
                 } else if (data.type === 'offer') {
                     if (isHost) return; 
-                    console.log("[WebRTC] Received Offer");
+                   
                     hasReceivedOffer.current = true; // Stop sending ready
 
                     // If we already have a remote description, maybe this is a re-offer?
@@ -154,7 +152,7 @@ export const useWebRTC = (roomId, userId, isHost) => {
                     });
                 } else if (data.type === 'answer') {
                     if (!isHost) return; 
-                    console.log("[WebRTC] Received Answer");
+                    
                     await peer.setRemoteDescription(new RTCSessionDescription(data));
 
                     // Process Queued Candidates
@@ -163,11 +161,11 @@ export const useWebRTC = (roomId, userId, isHost) => {
                         await peer.addIceCandidate(new RTCIceCandidate(candidate));
                     }
                 } else if (data.type === 'candidate') {
-                    console.log("[WebRTC] Received Candidate");
+                   
                     if (peer.remoteDescription) {
                         await peer.addIceCandidate(new RTCIceCandidate(data.candidate));
                     } else {
-                        console.log("[WebRTC] Queuing Candidate (No Remote Description)");
+                       
                         candidateQueue.current.push(data.candidate);
                     }
                 }
@@ -186,7 +184,7 @@ export const useWebRTC = (roomId, userId, isHost) => {
                     clearInterval(readyInterval);
                     return;
                 }
-                console.log("[WebRTC] Sending Ready...");
+                
                 socket.emit('signal', { roomId, signalData: { type: 'ready' } });
             }, 1000);
         }
@@ -198,11 +196,11 @@ export const useWebRTC = (roomId, userId, isHost) => {
     }, [socket, roomId, isHost]);
 
     const setupChannel = (channel) => {
-        console.log("[WebRTC] Channel Created:", channel.label);
+       
         channelRef.current = channel;
         
         channel.onopen = () => {
-            console.log("[WebRTC] Data Channel OPEN");
+            ;
             setStatus('CONNECTED');
         };
         

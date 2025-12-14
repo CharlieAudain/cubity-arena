@@ -33,3 +33,9 @@ export * from './encryptionKeys';
 
 // Concrete drivers
 export { GanDriver } from './drivers/GanDriver';
+export { GoCubeDriver } from './drivers/GoCubeDriver';
+export { MoyuDriver } from './drivers/MoyuDriver';
+export { QiYiDriver } from './drivers/QiYiDriver';
+
+// Manager
+export * as DriverManager from './DriverManager';

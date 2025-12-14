@@ -53,8 +53,7 @@ export function useScrambleGate(scrambleAlg: string, currentHardwareFacelets: st
             // Only update state if changed to prevent render loops
             if (newStatus !== status) {
                 setStatus(newStatus);
-                console.log(`[ScrambleGate] Status changed to: ${newStatus}`);
-            }
+                
         };
         
         check();

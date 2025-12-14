@@ -32,7 +32,7 @@ export class GoCubeDriver extends SmartDevice {
       throw new Error('Device has no GATT server');
     }
 
-    console.log('[GoCubeDriver] Connecting...');
+   
     const server = await device.gatt.connect();
     const services = await server.getPrimaryServices();
     const serviceUUIDs = services.map(s => s.uuid);
@@ -43,10 +43,10 @@ export class GoCubeDriver extends SmartDevice {
   async attach(device: BluetoothDevice, server: BluetoothRemoteGATTServer, serviceUUIDs: string[]): Promise<void> {
     this.device = device;
     
-    console.log('[GoCubeDriver] Getting Service...');
+   
     this.service = await server.getPrimaryService(SERVICE_UUID);
     
-    console.log('[GoCubeDriver] Getting Characteristics...');
+
     this.writeCharacteristic = await this.service.getCharacteristic(CHRCT_UUID_WRITE);
     this.readCharacteristic = await this.service.getCharacteristic(CHRCT_UUID_READ);
 
@@ -59,7 +59,7 @@ export class GoCubeDriver extends SmartDevice {
     this.deviceName = device.name || 'GoCube';
     this.status = ConnectionStatus.CONNECTED;
     this.emit('status', ConnectionStatus.CONNECTED);
-    console.log('[GoCubeDriver] Connected!');
+    
   }
 
   async disconnect(): Promise<void> {

@@ -30,7 +30,7 @@ const TimerView = ({
   onStatusChange = null // NEW: Callback for status changes
 }) => {
   // Use the new Game Loop Hook (Single Source of Truth)
-  const { timerState, time, inspectionTime, penalty, startInspection, reset, recenter, stop, lastSolutionMoves, isScrambled } = useGameLoop();
+  const { timerState, time, inspectionTime, penalty, startInspection, start, reset, recenter, stop, lastSolutionMoves, isScrambled } = useGameLoop();
   
   // Calibration State
   const [hasCalibrated, setHasCalibrated] = useState(false);
@@ -48,7 +48,7 @@ const TimerView = ({
   }, [smartCube?.isConnected]);
 
   const handleCalibration = () => {
-      console.log('[TimerView] User marked as solved. Calibration complete.');
+     
       recenter();
       setHasCalibrated(true);
       setShowCalibrationPrompt(false);
@@ -91,7 +91,7 @@ const TimerView = ({
             const newMoves = smartCube.moveHistory.filter(m => m.id > lastProcessedMoveId.current);
             
             if (newMoves.length > 0) {
-                console.log(`[TimerView] Processing ${newMoves.length} new move(s):`, newMoves.map(m => m.move).join(', '));
+              
                 
                 newMoves.forEach((moveData) => {
                     // Notify Parent (BattleRoom)
@@ -185,7 +185,7 @@ const TimerView = ({
               ? lastSolutionMoves.current 
               : solutionMoves;
 
-          console.log('[TimerView] Timer Stopped. Saving solve:', { time, solution: finalSolutionMoves });
+         
           
           const timeInSeconds = time / 1000;
           
@@ -259,7 +259,7 @@ const TimerView = ({
       if (smartCube && smartCube.isConnected && smartCube.facelets && smartCube.facelets !== SOLVED_FACELETS) {
           // If connected but software thinks it's scrambled, FORCE RECENTER
           // This handles the case where hardware state is desynced.
-          console.log('[TimerView] Force Recentering Cube State');
+        
           handleCalibration(); // Use new handler
           setSolutionMoves([]); 
           if (!disableScrambleGen) generateScramble(cubeType).then(setScramble);
@@ -324,7 +324,6 @@ const TimerView = ({
       };
   }, []);
 
-  // Render Interactive Scramble
   const renderScramble = () => {
       if (!smartCube || !smartCube.isConnected) return scramble;
 
@@ -371,6 +370,79 @@ const TimerView = ({
           </div>
       );
   };
+
+  // --- MANUAL TIMER LOGIC (Spacebar) ---
+
+  const [isSpaceDown, setIsSpaceDown] = useState(false);
+  const [readyProgress, setReadyProgress] = useState(0); // 0 to 100
+  const holdStartRef = useRef(0);
+  const readyTimeoutRef = useRef(null);
+
+  useEffect(() => {
+    // No Smart Cube, Not Battle
+    if (smartCube?.isConnected || isBattle) return;
+
+    const handleKeyDown = (e) => {
+        if (e.code !== 'Space') return;
+        
+        // Prevent default scrolling
+        e.preventDefault();
+
+        if (e.repeat) return; // Ignore repeats
+
+        setIsSpaceDown(true);
+
+        if (timerState === TimerState.RUNNING) {
+            // STOP TIMER
+            stop();
+        } else if (timerState === TimerState.IDLE || timerState === TimerState.STOPPED) {
+            // START HOLDING
+            holdStartRef.current = Date.now();
+            setReadyProgress(0); // Start red
+            
+        
+            // 0.5 seconds to ready
+            readyTimeoutRef.current = setTimeout(() => {
+                setReadyProgress(100); // Green
+            }, 500); // Stackmat style
+            
+        }
+    };
+
+    const handleKeyUp = (e) => {
+        if (e.code !== 'Space') return;
+        setIsSpaceDown(false);
+        setReadyProgress(0);
+
+        if (timerState === TimerState.RUNNING) return; // Already stopped on down
+
+        const holdTime = Date.now() - holdStartRef.current;
+        
+        if (readyTimeoutRef.current) {
+            clearTimeout(readyTimeoutRef.current);
+            readyTimeoutRef.current = null;
+        }
+
+        // 0.5 Seconds Threshold
+        if (holdTime >= 500) {  // 500ms
+             // Start!
+             reset(); // Reset first
+             start(); // Start timer
+        } else {
+            // Released too early
+            // Maybe reset inspection? 
+        }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+
+    return () => {
+        window.removeEventListener('keydown', handleKeyDown);
+        window.removeEventListener('keyup', handleKeyUp);
+        if (readyTimeoutRef.current) clearTimeout(readyTimeoutRef.current);
+    };
+  }, [smartCube?.isConnected, isBattle, timerState, stop, start, reset]);
 
   return (
     <div 
@@ -483,11 +555,20 @@ const TimerView = ({
         )}
 
         {timerState === TimerState.INSPECTION ? (
-            <span className={`${inspectionTime < 0 ? 'text-red-500' : 'text-orange-400'}`}>
+            <span className={`${
+                inspectionTime < 0 ? 'text-red-500' : 'text-orange-400'
+            }`}>
                 {Math.abs(inspectionTime)}
             </span>
         ) : (
-            (time / 1000).toFixed(2)
+            // Show colored timer if holding space
+            <span className={
+                isSpaceDown 
+                ? (readyProgress === 100 ? 'text-green-500' : 'text-red-500')
+                : 'text-white'
+            }>
+                {(time / 1000).toFixed(2)}
+            </span>
         )}
       </div>
       

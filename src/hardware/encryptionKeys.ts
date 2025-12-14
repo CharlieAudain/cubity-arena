@@ -50,15 +50,15 @@ export const GAN_ENCRYPTION_KEYS: number[][] = [
  * TODO: Extract from cstimerMoyu.js
  */
 export const MOYU_ENCRYPTION_KEYS: number[][] = [
-  // Placeholder - to be populated
+  [21, 119, 58, 92, 103, 14, 45, 31, 23, 103, 42, 19, 155, 103, 82, 87], // V1 Key
+  [17, 35, 38, 37, 134, 42, 44, 59, 85, 6, 127, 49, 126, 103, 33, 87]    // V1 IV
 ];
 
 /**
  * QiYi Cube Encryption Keys
- * TODO: Extract from cstimerQiyi.js
  */
 export const QIYI_ENCRYPTION_KEYS: number[][] = [
-  // Placeholder - to be populated
+  [87, 177, 249, 171, 205, 90, 232, 167, 156, 185, 140, 231, 87, 140, 81, 8] // Key
 ];
 
 /**

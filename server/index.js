@@ -249,7 +249,7 @@ io.use(async (socket, next) => {
     }
 });
 
-// Validation Middleware Wrapper
+
 // Validation Middleware Wrapper
 const validate = (socket, schemaFn, handler) => (data) => {
     // 1. Sanitize (if string)
@@ -511,10 +511,7 @@ io.on('connection', (socket) => {
             else if (socket.id === room.player2.socketId) winnerId = room.player1.id;
 
             if (winnerId) {
-                // Trigger Elo update logic via internal call or emit to self?
-                // Better to call a shared function or emit match_finished from server side?
-                // Calling match_finished handler via manual trigger is tricky.
-                // Let's refactor Elo update to a helper or just execute it here.
+                
                 
                 try {
                     room.processed = true; // Mark processed

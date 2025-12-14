@@ -21,7 +21,7 @@ const EmailPasswordAuth = ({ onClose, user }) => {
                 // Link credential to existing account (Guest or Google user)
                 const credential = EmailAuthProvider.credential(email, password);
                 await linkWithCredential(user, credential);
-                console.log('✅ Account linked with email/password');
+        
             } else if (isSignUp) {
                 // New user signing up
                 await createUserWithEmailAndPassword(auth, email, password);

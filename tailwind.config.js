@@ -4,7 +4,7 @@ export default {
   theme: {
     extend: {
       colors: {
-        // These are the custom colors used in your App.jsx
+       
         cubity: {
           bg: "#0f172a", // Slate 950 (Main Background)
           panel: "#1e293b", // Slate 800 (Cards/Panels)

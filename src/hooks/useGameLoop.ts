@@ -14,6 +14,7 @@ interface GameLoopResult {
     inspectionTime: number;
     penalty: string | null;
     startInspection: () => void;
+    start: () => void;
     reset: () => void;
     recenter: () => void;
     stop: (timestamp?: number, solutionMoves?: string[]) => void;
@@ -193,13 +194,13 @@ export function useGameLoop(): GameLoopResult {
         const handleUpdate = ({ move, timestamp }: { move: string, timestamp?: number }) => {
             // START LATCH: First Move Start
             if (timerState === TimerState.INSPECTION) {
-                console.log('[GameLoop] Auto-Start Triggered by Move:', move);
+               
                 startTimer(timestamp);
             }
         };
 
         const handleSolved = ({ timestamp, solutionMoves }: { timestamp?: number, solutionMoves?: string[] }) => {
-            console.log('[GameLoop] Solved Event Received. State:', timerState);
+           
             // STOP LATCH: Auto-Stop on Solve
             if (timerState === TimerState.RUNNING) {
                 stopTimer(timestamp, solutionMoves);
@@ -210,7 +211,7 @@ export function useGameLoop(): GameLoopResult {
              setIsScrambled(isComplete);
              // Allow start if IDLE or STOPPED (after previous solve)
              if (isComplete && (timerState === TimerState.IDLE || timerState === TimerState.STOPPED)) {
-                 console.log('[GameLoop] Scramble Complete. Starting Inspection.');
+                 
                  startInspection();
              }
         };
@@ -246,5 +247,5 @@ export function useGameLoop(): GameLoopResult {
     
     // Let's modify handleSolved to update the ref.
     
-    return { timerState, time, inspectionTime, penalty, startInspection, reset, recenter, stop: stopTimer, lastSolutionMoves, isScrambled };
+    return { timerState, time, inspectionTime, penalty, startInspection, start: startTimer, reset, recenter, stop: stopTimer, lastSolutionMoves, isScrambled };
 }

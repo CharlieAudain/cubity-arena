@@ -470,11 +470,7 @@ export class GanDriver extends SmartDevice {
         break;
       case 0xEC: // Gyro (Ignore)
         break;
-      case 0x04: // Hardware Info (Response to 0xDD 0x04?)
-        // This case seems to be for hardware info, but the provided snippet
-        // contains battery level parsing. Assuming it's a new mode for battery or a typo.
-        // If it's hardware info, this logic needs to be adjusted.
-        // For now, keeping the battery logic as provided in the instruction.
+      case 0x04: // Hardware Info / Battery
         const len = parseInt(bits.slice(8, 16), 2);
         const level = parseInt(bits.slice(8 + len * 8, 16 + len * 8), 2);
         this.emit('battery', level);
@@ -693,38 +689,24 @@ export class GanDriver extends SmartDevice {
       });
     } else {
       // Re-sync
-      // Re-sync
       Logger.log('GanDriver', `🔄 Re-sync facelet packet received. MoveCnt: ${moveCnt}`);
       
       // Check for missed moves
       if (this.prevMoveCnt !== -1) {
         // Debounce: Only check for gaps if we haven't seen a move recently (200ms)
-        // This prevents loops if the cube spams facelets while we are already fetching history.
         const lastMoveTime = this.moveHistory.length > 0 ? this.moveHistory[this.moveHistory.length - 1].localTime : 0;
         if (Date.now() - lastMoveTime > 200) {
             const diff = (moveCnt - this.prevMoveCnt) & 0xFF;
             if (diff > 0) {
                Logger.log('GanDriver', `⚠️ Detected gap in move count (Facelet): ${this.prevMoveCnt} -> ${moveCnt} (Diff: ${diff})`);
-               if (moveCnt !== 0) { // Avoid 0-move bug
+               if (moveCnt !== 0) { // Avoid 0-move edge case
                  // Request history ending at moveCnt (inclusive).
-                 // We request from moveCnt + 1 to cover moveCnt in the descending sequence.
                  const startMoveCnt = (moveCnt + 1) & 0xFF;
                  this.requestMoveHistory(startMoveCnt, diff + 1);
                }
             }
-        } else {
-            Logger.log('GanDriver', 'Ignoring facelet gap check (Debounced)');
         }
       }
-
-      // Verify state matches (Optional, for debugging)
-      // const currentFacelets = this.currentState;
-      // if (currentFacelets && currentFacelets !== facelets) {
-      //   console.warn('[GanDriver] State mismatch!', { current: currentFacelets, received: facelets });
-      // }
-      
-      // Update move count if we are just syncing up (though history request should handle it)
-      // this.prevMoveCnt = moveCnt; 
     }
   }
 
@@ -734,15 +716,9 @@ export class GanDriver extends SmartDevice {
   private async requestMoveHistory(startMoveCnt: number, numberOfMoves: number): Promise<void> {
       if (!this.service) return;
       
-      // Align to odd start number (cstimer logic)
-      // If startMoveCnt is Even (e.g. 52), we want 52.
-      // cstimer subtracts 1 -> 51.
-      // Response (count 2): 51, 50.
-      // We miss 52!
-      
-      // Wait, if we use cstimer logic, we MUST request FUTURE move (53) to get 52.
-      // In handleFaceletsPacket, we now request moveCnt + 1.
-      // In processMoveBuffer, we request nextMove.moveCnt.
+      // Align startMoveCnt to an odd number as per protocol requirements.
+      // If startMoveCnt is even, we decrement by 1 to request the preceding odd index.
+      // This ensures we receive the target move in the response pairs.
       
       if (startMoveCnt % 2 === 0) {
           startMoveCnt = (startMoveCnt - 1) & 0xFF;
@@ -771,8 +747,7 @@ export class GanDriver extends SmartDevice {
           Logger.error('GanDriver', 'Failed to send history request:', e);
           this.isFetchingHistory = false; // Reset on error
       }
-      // Note: isFetchingHistory remains true until we receive the packet or timeout
-      // We should add a timeout to reset it.
+    
       setTimeout(() => {
           if (this.isFetchingHistory) {
               Logger.warn('GanDriver', 'History request timed out. Resetting flag.');
@@ -1039,7 +1014,6 @@ export class GanDriver extends SmartDevice {
       try {
           const cube = await LogicalCube.getInstance();
 
-          // Safety: If buffer gets too full (stuck), request manual reset
           // Safety: If buffer gets too full (stuck), request manual reset
           // Increased limit to 50 to handle bursts during history fetch
           if (this.moveBuffer.length > 50) {

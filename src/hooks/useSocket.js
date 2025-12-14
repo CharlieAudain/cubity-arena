@@ -16,7 +16,7 @@ export const socket = io(SOCKET_URL, {
             try {
                 // Force refresh token (true) to prevent 1-hour expiration issues
                 const token = await user.getIdToken(true);
-                console.log('[Socket] Refreshing Auth Token...');
+                
                 cb({ token });
             } catch (e) {
                 console.error('[Socket] Failed to refresh token:', e);
@@ -31,11 +31,11 @@ export const socket = io(SOCKET_URL, {
 
 // Log connection status
 socket.on('connect', () => {
-    console.log('[Socket] Connected to server:', SOCKET_URL);
+    
 });
 
 socket.on('disconnect', () => {
-    console.log('[Socket] Disconnected from server');
+    
 });
 
 socket.on('connect_error', (error) => {

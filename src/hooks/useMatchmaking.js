@@ -16,7 +16,7 @@ export const useMatchmaking = (user) => {
 
         // Listen for Match Found
         socket.on('match_found', (data) => {
-            console.log("MATCH FOUND!", data);
+           
             setStatus('found');
             setRoomId(data.roomId);
             
@@ -71,7 +71,7 @@ export const useMatchmaking = (user) => {
     useEffect(() => {
         return () => {
             if (status === 'searching' && socket) {
-                console.log("Navigating away, leaving queue...");
+                
                 socket.emit('leave_queue');
             }
         };

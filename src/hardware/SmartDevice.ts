@@ -35,9 +35,7 @@ export abstract class SmartDevice {
    */
   protected device: BluetoothDevice | null = null;
 
-  /**
-   * Current connection status
-   */
+ 
   /**
    * Current connection status
    */
@@ -79,18 +77,6 @@ export abstract class SmartDevice {
 
   // ==================== Abstract Methods (Contract) ====================
 
-  /**
-   * Connect to the smart cube device.
-   * Implementations must:
-   * 1. Establish GATT connection
-   * 2. Discover services and characteristics
-   * 3. Perform encryption handshake (if required)
-   * 4. Subscribe to notifications
-   * 5. Emit 'status' events during connection process
-   * 
-   * @param device - The Bluetooth device to connect to
-   * @throws Error if connection fails
-   */
   /**
    * Connect to the smart cube device.
    * Implementations must:

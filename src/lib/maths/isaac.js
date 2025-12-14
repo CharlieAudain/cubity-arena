@@ -50,19 +50,10 @@ var isaac = (function(){
   function isaac() {
     var x, y, i;
     gnt = 0;
-    c = ++brs; // brs is global? No, defined in closure.
-    // Wait, original C code uses static variables.
-    // Let's check the variable definitions at top.
-    // var m = Array(256), r = Array(256), acc = 0, brs = 0, cnt = 0, rsl = Array(256), gnt = 0;
-    // c is not defined in closure scope, it's defined in seed() but not isaac().
-    // Actually, 'brs' corresponds to 'bb' in reference implementation?
-    // Let's use a cleaner implementation to be safe.
-    
-    // Re-implementing based on standard reference to avoid bugs.
-    // Using the implementation commonly found in cstimer/scramble generators.
+    c = ++brs; 
   }
   
-  // Redoing the closure with standard variables
+ 
   return (function(){
     var m = Array(256), r = Array(256), acc = 0, brs = 0, cnt = 0, rsl = Array(256), gnt = 0;
 

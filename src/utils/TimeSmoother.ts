@@ -55,19 +55,7 @@ export class TimeSmoother {
      */
     public getAdjustedTime(hardwareTime: number): number {
         // Apply current offset (assuming hardwareTime is close to recent adds)
-        // If hardwareTime is "future" relative to last add, it might have wrapped?
-        // We assume hardwareTime passed here is consistent with the stream.
-        
-        // If we just wrapped in `add`, we should use that offset.
-        // But if `getAdjustedTime` is called with a new time BEFORE `add` is called, we might miss the wrap.
-        // Usually `add` is called, then we might query.
-        // Or we query for the *current* point.
-        
-        // For safety, we re-check wrap relative to lastRaw? 
-        // No, `getAdjustedTime` is usually called for the *same* point we just added, or for a point we are about to process.
-        // Let's assume the offset is valid for the vicinity of the last added point.
-        
-        // However, if we are predicting for a NEW point that hasn't been added yet:
+      
         let offset = this.hardwareOffset;
         if (this.lastRawHardwareTime !== -1 && (this.lastRawHardwareTime - hardwareTime > this.WRAP_THRESHOLD)) {
              // It looks like it wrapped compared to our last known state

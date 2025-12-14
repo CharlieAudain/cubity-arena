@@ -52,11 +52,9 @@ export class MatchQueue {
     findMatch() {
         const now = Date.now();
 
-        // Sort by joinTime? Or just iterate? 
+   
         // Iterating in order ensures FIFO priority for the "searching" player.
-        // But usually we want to match the oldest waiter first.
-        // Let's assume queue order is roughly insertion order (FIFO).
-
+  
         for (let i = 0; i < this.queue.length; i++) {
             const p1 = this.queue[i];
             const waitTime = (now - p1.joinTime) / 1000; // in seconds

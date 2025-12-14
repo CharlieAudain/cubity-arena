@@ -40,10 +40,7 @@ export class ScrambleValidator {
         const moves = scramble.split(/\s+/);
         for (const move of moves) {
             if (!move) continue;
-            // We need a move parser. LogicalCube has getMoveIndex.
-            // But we can't access private method.
-            // We'll use a simple parser or duplicate logic.
-            // Or better: Use LogicalCube to validate/parse?
+       
             // For now, simple parser for standard moves.
             
             // Assuming standard WCA notation (R, R', R2)
@@ -64,7 +61,7 @@ export class ScrambleValidator {
             this.targetState.init(next.ca, next.ea);
         }
         
-        console.log('[ScrambleValidator] Target set:', this.targetState.toFaceCube());
+       
     }
 
     /**
@@ -89,27 +86,7 @@ export class ScrambleValidator {
         targetInv.invFrom(this.targetState);
         
         const diff = new CubieCube();
-        CubieCube.CubeMult(targetInv, currentDisplayState, diff); // diff = TargetInv * Current (Wait, order matters)
-        // We want: Current = Target * Rotation
-        // So Rotation = TargetInv * Current
-        
-        // Check if 'diff' is a valid rotation (isSolved() returns true for rotations? No, usually strict)
-        // We need to check if 'diff' is one of the 24 orientation states.
-        // mathlib doesn't have isRotation().
-        
-        // But we can check if it looks solved (all faces uniform).
-        // Or we can check against known rotation states if we had them.
-        
-        // Alternative from bluetoothutil.js:
-        // var stateInv = new CubieCube(); stateInv.invFrom(state);
-        // CubieCube.CubeMult(stateInv, scrState, toSolve);
-        // If toSolve is solved (or rotated), then match.
-        
-        // If we detect a match with rotation, we should update LogicalCube's anchor!
-        // LogicalCube.setAnchor(newAnchor)
-        
-        // For now, let's just return false if not strict match.
-        // Auto-homing requires access to LogicalCube internals to update anchor.
+        CubieCube.CubeMult(targetInv, currentDisplayState, diff); 
         
         return false;
     }

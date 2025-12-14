@@ -1,8 +1,9 @@
 import { SmartDevice } from '../SmartDevice';
 import { LogicalCube } from '../../engine/LogicalCube';
 import { ConnectionStatus } from '../types';
-import aesjs from 'aes-js';
-import LZString from 'lz-string';
+
+import * as aesjs from 'aes-js';
+import { MOYU_ENCRYPTION_KEYS, deriveKey, parseMacAddress } from '../encryptionKeys';
 
 // Old Moyu
 const MOYU_OLD_SERVICE = '00001000-0000-1000-8000-00805f9b34fb';
@@ -16,11 +17,6 @@ const MOYU_NEW_SERVICE = '0783b03e-7735-b5a0-1760-a305d2795cb0';
 const MOYU_NEW_READ = '0783b03e-7735-b5a0-1760-a305d2795cb1';
 const MOYU_NEW_WRITE = '0783b03e-7735-b5a0-1760-a305d2795cb2';
 
-// Encryption Keys (Compressed)
-const KEYS = [
-    'NoJgjANGYJwQrADgjEUAMBmKAWCP4JNIRswt81Yp5DztE1EB2AXSA',
-    'NoRg7ANAzArNAc1IigFgqgTB9MCcE8cAbBCJpKgeaSAAxTSPxgC6QA'
-];
 
 export class MoyuDriver extends SmartDevice {
   private service: BluetoothRemoteGATTService | null = null;
@@ -43,7 +39,7 @@ export class MoyuDriver extends SmartDevice {
     this.device = device;
     if (!device.gatt) throw new Error('No GATT server');
 
-    console.log('[MoyuDriver] Connecting...');
+  
     const server = await device.gatt.connect();
     const services = await server.getPrimaryServices();
     const serviceUUIDs = services.map(s => s.uuid);
@@ -59,11 +55,11 @@ export class MoyuDriver extends SmartDevice {
     if (serviceUUIDs.includes(MOYU_NEW_SERVICE)) {
         this.service = await server.getPrimaryService(MOYU_NEW_SERVICE);
         this.protocol = 'NEW';
-        console.log('[MoyuDriver] Detected NEW Protocol');
+        
     } else if (serviceUUIDs.includes(MOYU_OLD_SERVICE)) {
         this.service = await server.getPrimaryService(MOYU_OLD_SERVICE);
         this.protocol = 'OLD';
-        console.log('[MoyuDriver] Detected OLD Protocol');
+        
     } else {
         throw new Error('No supported Moyu protocol found');
     }
@@ -97,7 +93,7 @@ export class MoyuDriver extends SmartDevice {
 
     this.status = ConnectionStatus.CONNECTED;
     this.emit('status', ConnectionStatus.CONNECTED);
-    console.log('[MoyuDriver] Connected!');
+    
   }
 
   async disconnect(): Promise<void> {
@@ -127,32 +123,13 @@ export class MoyuDriver extends SmartDevice {
   // --- NEW Protocol Handling ---
 
   private async setupEncryption(device: BluetoothDevice): Promise<void> {
-      // Extract MAC from device (if available) or wait for advs?
-      // cstimer uses waitForAdvs.
-      // We assume we have MAC if we connected?
-      // But browser doesn't give MAC easily.
-      // We need to implement waitForAdvs like GanDriver.
-      
-      // For now, let's try to extract from name if possible, or use waitForAdvs.
-      // If we can't get MAC, encryption fails.
-      
-      // Let's reuse waitForAdvs logic from GanDriver but adapted.
-      // Or just assume we can get it.
-      
-      // Wait, cstimer says: "Automatic MAC address discovery only works when the cube is bound..."
-      // And it uses waitForAdvs.
-      
-      // I'll implement a simple MAC extraction here.
+      // Extract MAC address from advertisement data to derive session keys.
+      // This requires the device to be broadcasting manufacturer data.
+      // Falls back to a default MAC if unavailable, which may cause encryption failure.
       const mac = await this.waitForAdvs();
       
-      const macBytes = mac.split(':').map(b => parseInt(b, 16));
-      const key = JSON.parse(LZString.decompressFromEncodedURIComponent(KEYS[0]));
-      const iv = JSON.parse(LZString.decompressFromEncodedURIComponent(KEYS[1]));
-      
-      for (let i = 0; i < 6; i++) {
-          key[i] = (key[i] + macBytes[5 - i]) % 255;
-          iv[i] = (iv[i] + macBytes[5 - i]) % 255;
-      }
+      const macBytes = parseMacAddress(mac);
+      const { key, iv } = deriveKey(MOYU_ENCRYPTION_KEYS[0], MOYU_ENCRYPTION_KEYS[1], macBytes);
       
       this.aesCbc = new aesjs.ModeOfOperation.cbc(key, iv);
       this.iv = new Uint8Array(iv);
@@ -196,43 +173,9 @@ export class MoyuDriver extends SmartDevice {
       let value = new Uint8Array(target.value!.buffer);
       
       // Decrypt
+
       if (this.aesCbc && this.iv) {
-          // cstimer decode logic
-          // 1. Decrypt (AES-128-CBC)
-          // 2. XOR with IV
-          
-          // Wait, cstimer decode:
-          // if (ret.length > 16) ... decrypt block ...
-          // decoder.decrypt(ret)
-          // for (i < 16) ret[i] ^= iv[i]
-          
-          // aes-js decrypts in place? No, returns new array.
-          
-          // Simplified:
-          // We need to handle block decryption.
-          // Assuming single block for now or standard CBC.
-          
-          // cstimer logic is a bit custom with the XORs.
-          // Let's try standard CBC decrypt first.
-          // If it produces garbage, we check cstimer again.
-          
-          // cstimer:
-          // decoder.decrypt(ret) -> AES decrypt
-          // ret[i] ^= iv[i] -> CBC manual XOR?
-          // AES-CBC usually handles XOR with IV automatically.
-          // Maybe cstimer uses AES-ECB and does CBC manually?
-          // "decoder = $.aes128(key)" -> likely ECB.
-          
-          // If cstimer uses ECB and manual XOR, then we should use ECB mode in aes-js.
-          // But I initialized aesCbc (CBC).
-          // Let's switch to ECB and do manual XOR.
-          
-          // Actually, let's stick to CBC if possible.
-          // CBC: P1 = D(C1) ^ IV.
-          // cstimer: decoder.decrypt(ret) (ECB decrypt C1 -> X). ret[i] ^= iv[i] (X ^ IV -> P1).
-          // This IS CBC.
-          // So aes-js CBC mode should work directly.
-          
+          // Decrypt using AES-CBC. The library handles standard CBC decryption.
           value = this.aesCbc.decrypt(value);
       }
       
@@ -261,24 +204,13 @@ export class MoyuDriver extends SmartDevice {
           const m = parseInt(bitStr.slice(96 + i * 5, 101 + i * 5), 2);
           if (m >= 12) continue; // Invalid/Padding
           
-          const axis = m >> 1; // 0..5 -> FBUDLR (cstimer mapping)
-          const pow = m & 1;   // 0 -> ', 1 -> ' (Wait, cstimer: " '".charAt(m&1))
-          // cstimer: "FBUDLR".charAt(m >> 1) + " '".charAt(m & 1)
-          // 0 -> " " (90), 1 -> "'" (-90)
+          const axisVal = m >> 1; // 0..5 -> FBUDLR
+          const pow = m & 1;   // 0 -> 90 deg, 1 -> -90 deg
           
-          // Map FBUDLR to URFDLB
-          // F(0)->F, B(1)->B, U(2)->U, D(3)->D, L(4)->L, R(5)->R
-          // Wait, cstimer: "FBUDLR"
-          // Standard: URFDLB
-          // 0:F -> 2
-          // 1:B -> 5
-          // 2:U -> 0
-          // 3:D -> 3
-          // 4:L -> 4
-          // 5:R -> 1
-          
+          // Map FBUDLR to Standard URFDLB
+          // F(0)->2, B(1)->5, U(2)->0, D(3)->3, L(4)->4, R(5)->1
           const map = [2, 5, 0, 3, 4, 1];
-          const stdAxis = map[axis];
+          const stdAxis = map[axisVal];
           const suffix = pow === 0 ? "" : "'";
           
           const move = "URFDLB".charAt(stdAxis) + suffix;

@@ -62,13 +62,13 @@ export default function App() {
         // Connect if not already connected
         // The socket now handles token refresh internally via the `auth` callback
         if (!socket.connected) {
-            console.log("[App] Connecting socket...");
+           
             socket.connect();
         }
     } else {
         // Disconnect if logged out
         if (socket.connected) {
-            console.log("[App] User logged out, disconnecting socket.");
+           
             socket.disconnect();
         }
     }
@@ -81,7 +81,7 @@ export default function App() {
     const handleUpdateStats = (data) => {
         // data: { [uid]: newElo, ... }
         if (data[user.uid]) {
-            console.log(`[App] Stats Updated: ELO ${data[user.uid]}`);
+
             setUserData(prev => {
                 if (!prev) return prev;
                 return { ...prev, elo: data[user.uid] };
@@ -107,16 +107,7 @@ export default function App() {
           // We need to find if there is a document in banned_users where uid == currentUser.uid
           // Since banned_users is keyed by username, we query by uid field
           const bannedRef = collection(db, 'artifacts', 'cubity-v1', 'public', 'data', 'banned_users');
-          // Note: This requires an index on 'uid' if the collection gets large, but for now it's fine
-          // Or we can just query all and filter, but a query is better.
-          // However, to keep it simple without index requirements for now, we can check the user profile first to get the username, 
-          // then check banned_users by ID. But if they are banned, they might not have a profile or username might be different.
-          // Let's use a query.
-          // Actually, let's just check if the user has a profile, get the username, and check if that username is in banned_users.
-          // Wait, if an admin bans a user, they create a record in banned_users with the username as ID.
-          // So we need to know the username to check efficiently without a query index.
-          
-          // Let's try to get the user profile first.
+        
           // Let's try to get the user profile first.
           const userRef = doc(db, 'artifacts', 'cubity-v1', 'users', currentUser.uid, 'profile', 'main');
           
@@ -144,21 +135,15 @@ export default function App() {
                   const isSameDay = lastActive.toDateString() === now.toDateString();
                   const isYesterday = new Date(now.setDate(now.getDate() - 1)).toDateString() === lastActive.toDateString();
                   let newStreak = data.streak;
-                  if (!isSameDay && !isYesterday && data.joinedAt !== data.lastActive) {
-                      // Logic to reset streak if missed a day? 
-                      // Note: Updating doc inside onSnapshot might cause loop if not careful, 
-                      // but streak logic usually runs once per login or day check.
-                      // For now, let's keep it simple or move it out.
-                      // Ideally we only update lastActive on login.
-                  }
+                 
                   
-                  console.log("[App] Profile Updated via Firestore:", data);
+                  
                   setUserData(data); // This handles live Elo updates!
                   setTempName(data.displayName);
                   setLoading(false);
               } else {
                   // New user or no profile (Handle creation only once)
-                  console.log("No profile found, creating...");
+                 
                   // ... (Creation logic remains typically one-off, or can be moved to a cloud function)
                   // For now, we keep the creation logic here but we need to guard it to not run on every null snapshot?
                   // Actually, if it doesn't exist, we create it, then the listener will fire again with existence.
@@ -198,14 +183,7 @@ export default function App() {
               }
           });
           
-          // Store unsubscribe logic? 
-          // We are inside onAuthStateChanged which can fire multiple times.
-          // We should ideally track the unsubscription.
-          // But onAuthStateChanged returns an Unsubscribe.
-          // The cleanest way is to use a separate useEffect for user data fetching.
-          // BUT given the current structure, we can't easily return the unsub from inside the callback.
-          // However, React handles `setUser` state changes. 
-          // It's better to move this logic to a separate `useEffect` dependent on `user`.
+     
 
           const solvesQ = query(collection(db, 'artifacts', 'cubity-v1', 'users', currentUser.uid, 'solves'), orderBy('timestamp', 'desc'), limit(20));
           onSnapshot(solvesQ, (snapshot) => {
@@ -232,7 +210,7 @@ export default function App() {
   useEffect(() => {
       if (smartCube.isConnected && smartCube.deviceMAC && user && userData) {
           if (userData.macAddress !== smartCube.deviceMAC) {
-              console.log("Saving new MAC address:", smartCube.deviceMAC);
+            
               const userRef = doc(db, 'artifacts', 'cubity-v1', 'users', user.uid, 'profile', 'main');
               updateDoc(userRef, { macAddress: smartCube.deviceMAC })
                   .then(() => setUserData(prev => ({ ...prev, macAddress: smartCube.deviceMAC })))

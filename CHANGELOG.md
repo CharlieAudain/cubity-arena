@@ -1,51 +1,27 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
+## [Unreleased] - 2025-12-14
 
-## [0.2.0] - 2025-12-03
+### Added
+- **Arena Stats Tracking**: Arena solves are now saved to your history with a distinct 'Arena' mode.
+- **Solve Reconstruction**: Arena matches now save full move sequences, viewable in the Stats page with 3D playback.
+- **Stats View Enhancements**:
+    - Added "Arena" filter tab.
+    - Added Swords icon for arena solves.
+    - Improved chronological sorting (handles mixed timestamp formats).
+    - Fixed stats calculation to include all loaded solves, not just visible ones.
+- **Server-Side Elo Updates**:
+    - Refactored `match_finished`, `leave_room`, and `disconnect` events to use Firebase Admin SDK for secure, reliable Elo updates.
+    - Implemented auto-forfeit logic: Disconnecting or leaving a match in progress now correctly deducts Elo and awards a win to the opponent.
 
-### Public Launch & Universal Hardware
-This release introduces the public landing page and confirms universal support for all major smart cubes.
+### Fixed
+- **Moyu Driver**: Fixed `Uint8Array` type error in `MoyuDriver.ts`.
+- **Matchmaking**: Corrected `roomData` mapping in `useMatchmaking.js`.
+- **BattleRoom**:
+    - Fixed `undefined` opponent name error by adding a fallback.
+    - Fixed timestamp format mismatch (using ISO String now).
+- **SmartCube3D**: Removed redundant "Reset View" button.
+- **Server**: Replaced `cubing/scramble` with `scrambo` for reliable server-side scramble generation.
 
-#### 🚀 New Features
-- **Public Landing Page**: A full-screen, responsive landing page with "Continue with Google" and "Log In / Sign Up" options.
-- **Universal Driver Support**: Confirmed support for GAN, Moyu, QiYi, and GoCube devices via a unified driver architecture.
-- **Branding**: Added Cubity Arena logo and updated Discord invite links.
-
-#### 🔧 Fixes & Improvements
-- **CORS Configuration**: Enforced strict origin checks in production while allowing flexibility in development.
-- **Mobile Experience**: Improved responsive layout for authentication buttons on mobile devices.
-- **Navigation**: Conditionally hid app navigation for non-logged-in users.
-
-## [0.1.0] - 2025-12-01
-
-### Security Blitz & Scramble Fix
-This release focuses on hardening the application security, ensuring competitive integrity with WCA-compliant scrambles, and cleaning up the codebase for production.
-
-#### 🔒 Security
-- **Rate Limiting**: Implemented a leaky bucket rate limiter for Socket.IO (50 msgs/sec/socket).
-- **WebRTC Encryption**: Added explicit DTLS verification to prevent unencrypted connections.
-- **Input Validation**: Added server-side validation for all socket events using `validator.js`.
-- **Firestore Rules**: Secured `rooms` and `users` collections with strict read/write rules.
-- **Dependency Management**: Configured `Dependabot` for weekly security updates.
-- **Audit**: Achieved 0 vulnerabilities in `npm audit` for both root and server.
-
-#### 🎲 Competitive Integrity
-- **WCA Scrambles**: Replaced placeholder scrambles with the official `cubing/scramble` library.
-- **Server-Side Generation**: Scrambles are now generated on the server for matches to ensure fairness.
-- **Move Synchronization**: Switched to state-based sync (sending full facelet strings) to prevent desyncs.
-
-#### 🛠 Stability & Performance
-- **Memory Leaks**: Implemented "Deep Cleanup" in `server/index.js` to properly clear intervals and socket references.
-- **Error Boundaries**: Added React Error Boundaries around `SmartCube3D` to prevent app crashes.
-- **Guest Cleanup**: Implemented automatic deletion of anonymous accounts 60s after disconnection.
-
-#### 💅 UI/UX
-- **Discord Integration**: Added "Join Discord" buttons to Landing Page and User Menu.
-- **Production Cleanup**: Removed development-only "Test" navigation and "Debug Overlay".
-- **Visual Polish**: Improved Timer View layout and removed clutter.
-
-#### 🐛 Bug Fixes
-- Fixed "Invalid resource field value" Firestore errors.
-- Fixed "Unsupported stickering" errors in `SmartCube3D`.
-- Fixed "Ghost Users" in matchmaking queue.
+### Changed
+- **Profile Sync**: Switched client-side profile fetching to `onSnapshot` for real-time Elo updates in the UI.

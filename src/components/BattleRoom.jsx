@@ -38,18 +38,18 @@ const BattleRoom = ({ user, userData, roomData, roomId, onExit, smartCube }) => 
         if (!socket) return;
         
         socket.on('user_joined', ({ userId, userData }) => {
-            console.log(`User joined: ${userId}`, userData);
+            
             if (userData && userData.displayName) {
                 setOpponentName(userData.displayName);
             }
         });
 
         socket.on('opponent_left', () => {
-            console.log('⚠️ Opponent disconnected! Waiting 15s for rejoin...');
+           
             
             // Give opponent 15 seconds to rejoin before auto-leaving
             const disconnectTimer = setTimeout(async () => {
-                console.log('🗑️ Opponent did not rejoin. Auto-leaving room...');
+              
                 alert("Opponent disconnected and did not rejoin.");
                 await handleLeave();
             }, 15000); // 15 seconds
@@ -129,7 +129,7 @@ const BattleRoom = ({ user, userData, roomData, roomId, onExit, smartCube }) => 
                 if (cx === 'win') winnerId = user.uid;
                 else if (cx === 'loss') winnerId = roomData.player2?.uid || 'opponent';
                 
-                console.log(`[BattleRoom] Match Finished. Reporting result: ${cx} (Winner: ${winnerId})`);
+               
                 socket.emit('match_finished', { roomId, winnerId });
             }
         }
@@ -174,7 +174,7 @@ const BattleRoom = ({ user, userData, roomData, roomId, onExit, smartCube }) => 
                         roomId: roomId,
                         players: [roomData.player1?.uid, roomData.player2?.uid].filter(Boolean)
                     });
-                    console.log(`✅ Created room ${roomId} in Firestore`);
+                   
                 } catch (err) {
                     console.error("Error creating room in Firestore:", err);
                 }
@@ -223,7 +223,7 @@ const BattleRoom = ({ user, userData, roomData, roomId, onExit, smartCube }) => 
                     roomId: roomId,
                     solution: solutionMoves.current.join(' '), // Save reconstruction
                 });
-                console.log("Stats Saved:", timeNum);
+              
             }
         } catch (e) {
             console.error("Failed to save solve stats:", e);
@@ -235,7 +235,7 @@ const BattleRoom = ({ user, userData, roomData, roomId, onExit, smartCube }) => 
             // Delete room from Firestore
             const roomRef = doc(db, 'artifacts', 'cubity-v1', 'public', 'data', 'rooms', roomId);
             await deleteDoc(roomRef);
-            console.log(`🗑️ Deleted room ${roomId} from Firestore`);
+            
         } catch (err) {
             console.error('Error deleting room:', err);
         }
@@ -247,7 +247,7 @@ const BattleRoom = ({ user, userData, roomData, roomId, onExit, smartCube }) => 
     // Auto-cleanup: Delete room 30s after winner is decided
     useEffect(() => {
         if (result) {
-            console.log(`⏱️ Winner decided! Auto-deleting room in 30s...`);
+           
             const timer = setTimeout(async () => {
                 console.log(`🗑️ Auto-deleting room ${roomId} after 30s`);
                 await handleLeave();

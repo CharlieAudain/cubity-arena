@@ -79,15 +79,13 @@ export function getDriver(): SmartDevice {
     return activeDriver;
 }
 
-/**
- * Scan and Connect to any supported device
- */
+
 /**
  * Scan and Connect to any supported device
  */
 export async function scanAndConnect(): Promise<void> {
     try {
-        console.log('[DriverManager] Scanning for devices...');
+       
         
         // Aggregate filters and services
         const filters = DRIVERS.flatMap(d => d.filters);
@@ -100,14 +98,12 @@ export async function scanAndConnect(): Promise<void> {
             optionalManufacturerData: optionalManufacturerData
         });
 
-        console.log('[DriverManager] Device selected:', device.name);
-        console.log('[DriverManager] Connecting GATT to inspect services...');
         
         const server = await device.gatt!.connect();
         const services = await server.getPrimaryServices();
         const serviceUUIDs = services.map(s => s.uuid);
         
-        console.log('[DriverManager] Discovered Services:', JSON.stringify(serviceUUIDs));
+      
 
         // Factory Logic: Select Driver based on Services
         let DriverClass: (new () => SmartDevice) | null = null;
@@ -121,13 +117,13 @@ export async function scanAndConnect(): Promise<void> {
             uuid === '00000010-0000-fff7-fff6-fff5fff4fff0' || // V4 Variant
             uuid === '0000fff0-0000-1000-8000-00805f9b34fb'    // Common/V1
         )) {
-            console.log('[DriverManager] Identified as GAN Cube');
+           
             DriverClass = GanDriver;
         }
         
         // 2. Check for GoCube
         else if (serviceUUIDs.some(uuid => uuid.startsWith('6e400001-b5a3-f393-e0a9-e50e24dcca9e'))) {
-            console.log('[DriverManager] Identified as GoCube');
+          
             DriverClass = GoCubeDriver;
         }
         
@@ -136,50 +132,17 @@ export async function scanAndConnect(): Promise<void> {
             uuid === '00001000-0000-1000-8000-00805f9b34fb' || // Old
             uuid === '0783b03e-7735-b5a0-1760-a305d2795cb0'    // New
         )) {
-            console.log('[DriverManager] Identified as Moyu Cube');
+            
             DriverClass = MoyuDriver;
         }
         
         // 4. Check for QiYi
         else if (serviceUUIDs.some(uuid => uuid.startsWith('0000fff0-0000-1000-8000-00805f9b34fb'))) {
-            // QiYi shares FFF0 with GAN V1?
-            // Need to distinguish.
-            // QiYi usually has name "QY-..." or "XMD..."
-            // But we want to rely on services.
-            // QiYi has specific characteristics inside FFF0?
-            // Or maybe check name as fallback.
+             // Secondary Identification Strategy: Filter by name since FFF0 is common
             if (device.name && (device.name.startsWith('QY') || device.name.startsWith('XMD'))) {
-                console.log('[DriverManager] Identified as QiYi Cube (by Name + Service)');
+               
                 DriverClass = QiYiDriver;
-            } else {
-                // If it has FFF0 but not GAN specific services...
-                // It might be GAN V1 or QiYi.
-                // Default to GanDriver for FFF0 if name doesn't match QiYi?
-                // Or try QiYi?
-                // Let's assume GAN if FFF0 is present and not QiYi name.
-                // But we already checked GAN above.
-                // Wait, GAN check above includes FFF0.
-                // So if it has FFF0, it matches GAN first.
-                // We should re-order or refine.
-                
-                // Refined Logic:
-                // QiYi uses FFF0 service.
-                // GAN uses FFF0 service (V1/Common).
-                // We must check name or other characteristics.
-                // Since we already connected, we can check characteristics?
-                // Too complex for factory.
-                // Let's stick to Name for disambiguation if Service is ambiguous.
-                
-                // If we are here, it didn't match GAN specific services (V2/V3/V4).
-                // It matched FFF0? No, FFF0 is in GAN check.
-                // So if it has FFF0, it went to GAN.
-                
-                // We need to move QiYi check BEFORE GAN check if we want to prioritize it,
-                // OR make GAN check stricter.
-                
-                // Let's modify the GAN check to NOT include FFF0 blindly?
-                // Or check for QiYi name inside GAN check?
-            }
+            } 
         }
 
         // Refined Selection Logic

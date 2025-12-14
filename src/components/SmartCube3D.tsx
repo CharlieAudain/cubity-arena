@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { TwistyPlayer } from 'cubing/twisty';
 import { Alg } from 'cubing/alg';
-// @ts-ignore
+
 import { solve } from 'cube-solver';
 import * as DriverManager from '../hardware/DriverManager';
 import { LogicalCube } from '../engine/LogicalCube';
@@ -63,7 +63,7 @@ const SmartCube3D: React.FC<SmartCube3DProps> = ({
       player.style.height = '100%';
       player.setAttribute('control-panel', 'none');
       player.setAttribute('background', 'none');
-      // @ts-ignore - tempoScale is missing in types but exists in API
+   
       player.tempoScale = 5; // Speed up animations to prevent skipping
       
       containerRef.current.appendChild(player);
@@ -104,7 +104,6 @@ const SmartCube3D: React.FC<SmartCube3DProps> = ({
 
           // Apply state directly using experimentalStickering
           // This avoids solving/inverting which can be buggy with different facelet definitions
-          // @ts-ignore
           playerRef.current.experimentalStickering = state;
       }
   };
@@ -195,26 +194,7 @@ const SmartCube3D: React.FC<SmartCube3DProps> = ({
       }
   }, [syncTrigger, isConnected]);
 
-  // Handle Live Moves from moveHistory prop (legacy)
-  // REMOVED: Duplicate listener. Moves are now handled by LogicalCube events.
-  /*
-  const lastProcessedMoveId = useRef(0);
 
-  useEffect(() => {
-      if (moveHistory && moveHistory.length > 0) {
-          const newMoves = moveHistory.filter(m => m.id > lastProcessedMoveId.current);
-          
-          newMoves.forEach(moveData => {
-              moveQueue.current.push(moveData.move);
-              lastProcessedMoveId.current = moveData.id;
-          });
-
-          if (newMoves.length > 0) {
-              processQueue();
-          }
-      }
-  }, [moveHistory]);
-  */
 
 
   
