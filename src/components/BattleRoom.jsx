@@ -6,7 +6,7 @@ import { getSolvedState, applyMoveToFacelets, SOLVED_FACELETS } from '../utils/c
 import { LogicalCube } from '../engine/LogicalCube';
 import { useWebRTC } from '../hooks/useWebRTC';
 import { useSocket } from '../hooks/useSocket';
-import { doc, deleteDoc, setDoc } from 'firebase/firestore';
+import { doc, deleteDoc, setDoc, addDoc, collection } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 
 const BattleRoom = ({ user, userData, roomData, roomId, onExit, smartCube }) => {
@@ -28,6 +28,7 @@ const BattleRoom = ({ user, userData, roomData, roomId, onExit, smartCube }) => 
 
     const socket = useSocket();
     const lastOpTimestamp = useRef(0);
+    const solutionMoves = useRef([]); // Track moves for reconstruction
 
     // WebRTC Integration
     const { status: rtcStatus, sendMessage: sendRtcMessage, lastMessage: rtcMessage } = useWebRTC(roomId, user.uid, amIPlayer1);
@@ -142,6 +143,9 @@ const BattleRoom = ({ user, userData, roomData, roomId, onExit, smartCube }) => 
         const handleUpdate = ({ move, state, timestamp }) => {
             if (!move || typeof move !== 'string') return; // Ignore updates without valid moves
 
+            // Track for reconstruction
+            solutionMoves.current.push(move);
+
             // console.log(`[BattleRoom] Sending Move: ${move}`);
             const updateData = { move, state, timestamp: timestamp || Date.now(), status: 'SOLVING' }; 
             
@@ -195,15 +199,36 @@ const BattleRoom = ({ user, userData, roomData, roomId, onExit, smartCube }) => 
         }
     }, [rtcStatus, sendRtcMessage]);
 
+
     const onBattleSolveComplete = useCallback(async (time) => {
+        const timeNum = parseFloat(time);
         if (rtcStatus === 'CONNECTED') {
             sendRtcMessage({ 
                 type: 'RESULT_OPPONENT', 
-                data: { time: parseFloat(time) } 
+                data: { time: timeNum } 
             });
         }
-        setMyTime(parseFloat(time));
-    }, [rtcStatus, sendRtcMessage]);
+        setMyTime(timeNum);
+
+        // Save Solve to Stats
+        try {
+            if (user) {
+                await addDoc(collection(db, 'artifacts', 'cubity-v1', 'users', user.uid, 'solves'), {
+                    time: timeNum,
+                    scramble: roomData.scramble,
+                    timestamp: new Date().toISOString(),
+                    type: roomData.type || '3x3',
+                    mode: 'arena',
+                    opponent: opponentName || 'Opponent',
+                    roomId: roomId,
+                    solution: solutionMoves.current.join(' '), // Save reconstruction
+                });
+                console.log("Stats Saved:", timeNum);
+            }
+        } catch (e) {
+            console.error("Failed to save solve stats:", e);
+        }
+    }, [rtcStatus, sendRtcMessage, user, roomData, opponentName, roomId]);
 
     const handleLeave = async () => {
         try {

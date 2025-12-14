@@ -303,7 +303,7 @@ export class MoyuDriver extends SmartDevice {
       
       // Encrypt
       const encrypted = this.aesCbc.encrypt(req);
-      await this.writeCharacteristic.writeValue(encrypted);
+      await this.writeCharacteristic.writeValue(new Uint8Array(encrypted));
   }
 
   // --- OLD Protocol Handling ---

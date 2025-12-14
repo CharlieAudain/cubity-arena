@@ -20,14 +20,24 @@ export const useMatchmaking = (user) => {
             setStatus('found');
             setRoomId(data.roomId);
             
-            // Construct roomData similar to what Firestore provided
+            // Determine roles based on uid
+            const p1 = data.players.p1;
+            const p2 = data.players.p2;
+            
+            // Note: Server determines roles. We just map them to roomData.
+            // But we need to keep the structure expected by BattleRoom.
+            // BattleRoom expects player1 and player2 objects.
+            
+            // Check if I am Player 1
+            const iAmP1 = user.uid === p1.id;
+            
             setRoomData({
                 id: data.roomId,
-                player1: data.isHost ? user : data.opponent,
-                player2: data.isHost ? data.opponent : user,
+                player1: { uid: p1.id, displayName: p1.name, elo: p1.elo }, 
+                player2: { uid: p2.id, displayName: p2.name, elo: p2.elo },
                 scramble: data.scramble,
                 type: '3x3',
-                isHost: data.isHost // Helper for WebRTC
+                isHost: iAmP1 // Explicitly set host flag for BattleRoom
             });
         });
 

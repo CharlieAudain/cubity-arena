@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  X, Trash2, Calendar, Box, TrendingUp, Grid2x2, Grid3x3, ChevronRight, Play, Pause, SkipBack, SkipForward 
+  X, Trash2, Calendar, Box, TrendingUp, Grid2x2, Grid3x3, ChevronRight, Play, Pause, SkipBack, SkipForward, Swords
 } from 'lucide-react';
 import { 
   doc, updateDoc, deleteDoc, collection, query, orderBy, limit, onSnapshot 
@@ -34,6 +34,9 @@ const StatsView = ({ userId }) => {
     const q = query(collection(db, 'artifacts', 'cubity-v1', 'users', userId, 'solves'), orderBy('timestamp', 'desc'), limit(200));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const history = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      // Sort chronologically (newest first) to match filtered view and ensure correct "Best" stats
+      history.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+      
       setSolves(history);
       setLoading(false);
     });
@@ -43,10 +46,20 @@ const StatsView = ({ userId }) => {
   useEffect(() => {
     let filtered = solves;
     if (filterType !== 'all') {
-      filtered = solves.filter(s => s.type === filterType || (filterType === '3x3' && !s.type)); 
+      if (filterType === 'arena') {
+        filtered = solves.filter(s => s.mode === 'arena');
+      } else {
+        filtered = solves.filter(s => (s.type === filterType || (filterType === '3x3' && !s.type)) && s.mode !== 'arena'); 
+      }
     }
-    setFilteredSolves(filtered.slice(0, viewLimit));
-  }, [solves, filterType, viewLimit]);
+    
+    // Explicitly sort by timestamp to handle mixed types (Number vs String)
+    filtered.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    
+    setFilteredSolves(filtered);
+  }, [solves, filterType]);
+
+  const visibleSolves = filteredSolves.slice(0, viewLimit);
 
   // Optimize Solution when selected
   useEffect(() => {
@@ -210,6 +223,8 @@ const StatsView = ({ userId }) => {
       
       <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
         <button onMouseUp={blurOnUI} onClick={() => setFilterType('all')} className={`px-4 py-2 rounded-lg text-xs font-bold uppercase transition-colors ${filterType==='all' ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}>All</button>
+        <button onMouseUp={blurOnUI} onClick={() => setFilterType('3x3')} className={`px-4 py-2 rounded-lg text-xs font-bold uppercase transition-colors ${filterType==='3x3' ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}>3x3</button>
+        <button onMouseUp={blurOnUI} onClick={() => setFilterType('arena')} className={`px-4 py-2 rounded-lg text-xs font-bold uppercase transition-colors flex items-center gap-2 ${filterType==='arena' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}><Swords className="w-3 h-3"/> Arena</button>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
@@ -237,7 +252,7 @@ const StatsView = ({ userId }) => {
           <div className="text-xs text-slate-500 font-mono">Showing {filteredSolves.length}</div>
         </div>
         <div className="divide-y divide-white/5">
-          {filteredSolves.map(solve => (
+          {visibleSolves.map(solve => (
             <div key={solve.id} onClick={() => setSelectedSolve(solve)} className="flex justify-between px-6 py-4 hover:bg-white/5 cursor-pointer group transition-colors">
               <div className="flex items-center gap-4">
                 <div className={`w-1 h-8 rounded-full ${solve.penalty === 'DNF' ? 'bg-red-500' : solve.penalty === 2 ? 'bg-yellow-500' : 'bg-blue-600'}`}></div>
@@ -246,9 +261,14 @@ const StatsView = ({ userId }) => {
                     {solve.penalty === 'DNF' ? 'DNF' : (solve.time + (solve.penalty === 2 ? 2 : 0)).toFixed(2) + (solve.penalty === 2 ? '+' : 's')}
                   </div>
                   <div className="text-xs text-slate-500 flex items-center gap-2">
-                    {solve.type === '2x2' && <Grid2x2 className="w-3 h-3" />}
-                    {solve.type === '4x4' && <Grid3x3 className="w-3 h-3" />}
-                    {(!solve.type || solve.type === '3x3') && <Box className="w-3 h-3" />}
+                    {solve.mode === 'arena' && <Swords className="w-3 h-3 text-indigo-400" />}
+                    {(!solve.mode || solve.mode === 'normal') && (
+                      <>
+                        {solve.type === '2x2' && <Grid2x2 className="w-3 h-3" />}
+                        {solve.type === '4x4' && <Grid3x3 className="w-3 h-3" />}
+                        {(!solve.type || solve.type === '3x3') && <Box className="w-3 h-3" />}
+                      </>
+                    )}
                     {new Date(solve.timestamp).toLocaleDateString()}
                   </div>
                 </div>

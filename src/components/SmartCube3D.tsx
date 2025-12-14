@@ -245,15 +245,6 @@ const SmartCube3D: React.FC<SmartCube3DProps> = ({
   return (
     <div className="relative w-full h-full flex flex-col items-center">
       <div ref={containerRef} className={`w-full flex items-center justify-center ${className}`} />
-      
-      {isConnected && (
-        <button 
-          onClick={handleResetOrientation}
-          className="absolute bottom-2 right-2 bg-gray-800/80 text-white text-xs px-2 py-1 rounded hover:bg-gray-700 transition-colors z-10"
-        >
-          Reset View
-        </button>
-      )}
     </div>
   );
 };
