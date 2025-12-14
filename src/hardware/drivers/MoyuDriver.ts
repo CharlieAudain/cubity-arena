@@ -45,16 +45,27 @@ export class MoyuDriver extends SmartDevice {
 
     console.log('[MoyuDriver] Connecting...');
     const server = await device.gatt.connect();
+    const services = await server.getPrimaryServices();
+    const serviceUUIDs = services.map(s => s.uuid);
+    
+    await this.attach(device, server, serviceUUIDs);
+  }
 
+  async attach(device: BluetoothDevice, server: BluetoothRemoteGATTServer, serviceUUIDs: string[]): Promise<void> {
+    this.device = device;
+    this.deviceName = device.name || 'Moyu Cube';
+    
     // Detect Protocol
-    try {
+    if (serviceUUIDs.includes(MOYU_NEW_SERVICE)) {
         this.service = await server.getPrimaryService(MOYU_NEW_SERVICE);
         this.protocol = 'NEW';
         console.log('[MoyuDriver] Detected NEW Protocol');
-    } catch {
+    } else if (serviceUUIDs.includes(MOYU_OLD_SERVICE)) {
         this.service = await server.getPrimaryService(MOYU_OLD_SERVICE);
         this.protocol = 'OLD';
         console.log('[MoyuDriver] Detected OLD Protocol');
+    } else {
+        throw new Error('No supported Moyu protocol found');
     }
 
     if (this.protocol === 'NEW') {
@@ -84,7 +95,6 @@ export class MoyuDriver extends SmartDevice {
         this.turnCharacteristic.addEventListener('characteristicvaluechanged', this.handleNotificationOldTurn.bind(this));
     }
 
-    this.deviceName = device.name || 'Moyu Cube';
     this.status = ConnectionStatus.CONNECTED;
     this.emit('status', ConnectionStatus.CONNECTED);
     console.log('[MoyuDriver] Connected!');

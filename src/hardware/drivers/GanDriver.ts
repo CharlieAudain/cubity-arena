@@ -66,6 +66,12 @@ export class GanDriver extends SmartDevice {
   /**
    * Connect using manual MAC address
    */
+  /**
+   * Connect using manual MAC address
+   */
+  /**
+   * Connect using manual MAC address
+   */
   async connectWithMac(macAddress: string): Promise<void> {
     try {
       Logger.log('GanDriver', 'Connecting with manual MAC:', macAddress);
@@ -74,7 +80,7 @@ export class GanDriver extends SmartDevice {
 
       // Request device with all possible GAN service UUIDs
       const device = await navigator.bluetooth.requestDevice({
-        filters: [{ namePrefix: 'GAN' }],
+        filters: [{ namePrefix: 'GAN' }, { namePrefix: 'MG' }, { namePrefix: 'AiCube' }],
         optionalServices: [
           '0000fff0-0000-1000-8000-00805f9b34fb', // GAN V1/Common
           SERVICE_UUID_V2DATA,
@@ -84,66 +90,15 @@ export class GanDriver extends SmartDevice {
         ]
       });
 
-      this.device = device;
-      this.deviceName = device.name || 'GAN Cube';
       this.deviceMAC = macAddress;
-
+      
       // Connect GATT
       const server = await device.gatt!.connect();
-      this.server = server;
-
-      // Detect protocol version by checking available services
       const services = await server.getPrimaryServices();
       const serviceUUIDs = services.map(s => s.uuid);
-      Logger.log('GanDriver', 'Available services (UUIDs):', JSON.stringify(serviceUUIDs));
       
-      // Check for V2
-      let foundService = services.find(s => s.uuid === SERVICE_UUID_V2DATA);
-      if (foundService) {
-        Logger.log('GanDriver', 'Protocol: V2');
-        this.service = foundService;
-        await this.initV2Protocol(macAddress);
-        return;
-      }
+      await this.attach(device, server, serviceUUIDs);
 
-      // Check for V3
-      foundService = services.find(s => s.uuid === SERVICE_UUID_V3DATA);
-      if (foundService) {
-        Logger.log('GanDriver', 'Protocol: V3');
-        this.service = foundService;
-        await this.initV3Protocol(macAddress);
-        return;
-      }
-
-      // Check for V4 (Standard)
-      foundService = services.find(s => s.uuid === SERVICE_UUID_V4DATA);
-      if (foundService) {
-        Logger.log('GanDriver', 'Protocol: V4');
-        this.service = foundService;
-        await this.initV4Protocol(macAddress);
-        return;
-      }
-
-      // Check for V4 (Detected Variant)
-      // UUID: 00000010-0000-fff7-fff6-fff5fff4fff0
-      foundService = services.find(s => s.uuid === '00000010-0000-fff7-fff6-fff5fff4fff0');
-      if (foundService) {
-        Logger.log('GanDriver', 'Protocol: V4 (Detected Variant)');
-        this.service = foundService;
-        await this.initV4Protocol(macAddress);
-        return;
-      }
-
-      // Fallback: Check for 0000fff0 (Common GAN Service)
-      foundService = services.find(s => s.uuid === '0000fff0-0000-1000-8000-00805f9b34fb');
-      if (foundService) {
-        Logger.log('GanDriver', 'Protocol: V4 (Detected via FFF0)');
-        this.service = foundService;
-        await this.initV4Protocol(macAddress);
-        return;
-      }
-
-      throw new Error('No supported GAN protocol found on this device');
     } catch (error) {
       Logger.error('GanDriver', 'Connection failed:', error);
       this.status = ConnectionStatus.DISCONNECTED;
@@ -258,81 +213,14 @@ export class GanDriver extends SmartDevice {
       this.status = ConnectionStatus.CONNECTING;
       this.emit('status', this.status);
 
-      this.device = device;
-      this.deviceName = device.name || 'GAN Cube';
-
-      // 1. Extract MAC from Manufacturer Data (BEFORE connecting)
-      // Most devices stop advertising when connected, so we must do this first.
-      let macAddress = this.deviceMAC || '';
-      
-      if (!macAddress) {
-          try {
-              macAddress = await this.waitForAdvs();
-              this.deviceMAC = macAddress;
-              Logger.log('GanDriver', 'Auto-detected MAC:', macAddress);
-          } catch (err) {
-              Logger.warn('GanDriver', 'Failed to auto-detect MAC:', err);
-              // Fallback to manual prompt or empty
-          }
-      }
-
-      // 2. Connect GATT
+      // Connect GATT
       Logger.log('GanDriver', 'Connecting GATT...');
       const server = await device.gatt!.connect();
-      this.server = server;
-
+      
       const services = await server.getPrimaryServices();
       const serviceUUIDs = services.map(s => s.uuid);
-      Logger.log('GanDriver', 'Available services:', JSON.stringify(serviceUUIDs));
-
-      // ... (Protocol matching logic)
-      // We pass macAddress to init methods.
-
-      let foundService = services.find(s => s.uuid === '6e400001-b5a3-f393-e0a9-e50e24dc4179');
-      if (foundService) {
-        this.service = foundService;
-        await this.initV2Protocol(macAddress);
-        return;
-      }
-
-      foundService = services.find(s => s.uuid === '8653000a-43e6-47b7-9cb0-5fc21d4ae340');
-      if (foundService) {
-        this.service = foundService;
-        await this.initV3Protocol(macAddress);
-        return;
-      }
-
-      foundService = services.find(s => s.uuid === SERVICE_UUID_V3DATA);
-      if (foundService) {
-        this.service = foundService;
-        await this.initV3Protocol(this.deviceMAC || '');
-        return;
-      }
-
-      foundService = services.find(s => s.uuid === SERVICE_UUID_V4DATA);
-      if (foundService) {
-        this.service = foundService;
-        await this.initV4Protocol(this.deviceMAC || '');
-        return;
-      }
       
-      // Variant
-      foundService = services.find(s => s.uuid === '00000010-0000-fff7-fff6-fff5fff4fff0');
-      if (foundService) {
-        this.service = foundService;
-        await this.initV4Protocol(this.deviceMAC || '');
-        return;
-      }
-
-      // Fallback
-      foundService = services.find(s => s.uuid === '0000fff0-0000-1000-8000-00805f9b34fb');
-      if (foundService) {
-        this.service = foundService;
-        await this.initV4Protocol(this.deviceMAC || '');
-        return;
-      }
-
-      throw new Error('No supported GAN protocol found');
+      await this.attach(device, server, serviceUUIDs);
 
     } catch (error) {
        Logger.error('GanDriver', 'Connection failed:', error);
@@ -340,6 +228,73 @@ export class GanDriver extends SmartDevice {
        this.emit('status', this.status);
        throw error;
     }
+  }
+
+  /**
+   * Attach to an already connected device
+   */
+  async attach(device: BluetoothDevice, server: BluetoothRemoteGATTServer, serviceUUIDs: string[]): Promise<void> {
+      this.device = device;
+      this.server = server;
+      this.deviceName = device.name || 'GAN Cube';
+      this.status = ConnectionStatus.CONNECTING;
+      
+      Logger.log('GanDriver', 'Attaching to device. Services:', JSON.stringify(serviceUUIDs));
+
+      // 1. Ensure MAC Address
+      if (!this.deviceMAC) {
+          try {
+              const mac = await this.waitForAdvs();
+              this.deviceMAC = mac;
+              Logger.log('GanDriver', 'Auto-detected MAC:', mac);
+          } catch (err) {
+              Logger.warn('GanDriver', 'Failed to auto-detect MAC:', err);
+              // Some protocols (V2/V3) might fail without MAC.
+          }
+      }
+
+      // 2. Detect Protocol
+      // Check for V2
+      if (serviceUUIDs.includes(SERVICE_UUID_V2DATA)) {
+        Logger.log('GanDriver', 'Protocol: V2');
+        this.service = await server.getPrimaryService(SERVICE_UUID_V2DATA);
+        await this.initV2Protocol(this.deviceMAC || '');
+        return;
+      }
+
+      // Check for V3
+      if (serviceUUIDs.includes(SERVICE_UUID_V3DATA)) {
+        Logger.log('GanDriver', 'Protocol: V3');
+        this.service = await server.getPrimaryService(SERVICE_UUID_V3DATA);
+        await this.initV3Protocol(this.deviceMAC || '');
+        return;
+      }
+
+      // Check for V4 (Standard)
+      if (serviceUUIDs.includes(SERVICE_UUID_V4DATA)) {
+        Logger.log('GanDriver', 'Protocol: V4');
+        this.service = await server.getPrimaryService(SERVICE_UUID_V4DATA);
+        await this.initV4Protocol(this.deviceMAC || '');
+        return;
+      }
+
+      // Check for V4 (Detected Variant)
+      if (serviceUUIDs.includes('00000010-0000-fff7-fff6-fff5fff4fff0')) {
+        Logger.log('GanDriver', 'Protocol: V4 (Detected Variant)');
+        this.service = await server.getPrimaryService('00000010-0000-fff7-fff6-fff5fff4fff0');
+        await this.initV4Protocol(this.deviceMAC || '');
+        return;
+      }
+
+      // Fallback: Check for 0000fff0 (Common GAN Service)
+      if (serviceUUIDs.includes('0000fff0-0000-1000-8000-00805f9b34fb')) {
+        Logger.log('GanDriver', 'Protocol: V4 (Detected via FFF0)');
+        this.service = await server.getPrimaryService('0000fff0-0000-1000-8000-00805f9b34fb');
+        await this.initV4Protocol(this.deviceMAC || '');
+        return;
+      }
+
+      throw new Error('No supported GAN protocol found on this device');
   }
 
   /**

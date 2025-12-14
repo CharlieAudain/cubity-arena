@@ -27,6 +27,14 @@ export class QiYiDriver extends SmartDevice {
 
     console.log('[QiYiDriver] Connecting...');
     const server = await device.gatt.connect();
+    const services = await server.getPrimaryServices();
+    const serviceUUIDs = services.map(s => s.uuid);
+    
+    await this.attach(device, server, serviceUUIDs);
+  }
+
+  async attach(device: BluetoothDevice, server: BluetoothRemoteGATTServer, serviceUUIDs: string[]): Promise<void> {
+    this.device = device;
     
     console.log('[QiYiDriver] Getting Service...');
     this.service = await server.getPrimaryService(SERVICE_UUID);
@@ -42,13 +50,6 @@ export class QiYiDriver extends SmartDevice {
     this.characteristic.addEventListener('characteristicvaluechanged', this.handleNotification.bind(this));
 
     // Send Hello
-    // We need MAC address for Hello.
-    // cstimer uses waitForAdvs to get MAC.
-    // If we don't have MAC, we can't send Hello?
-    // "sendHello(mac) ... if (!mac) reject".
-    // Does the cube work without Hello?
-    // Probably not.
-    
     const mac = await this.waitForAdvs();
     await this.sendHello(mac);
 

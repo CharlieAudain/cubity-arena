@@ -5,10 +5,13 @@ import cors from 'cors';
 import { v4 as uuidv4 } from 'uuid';
 import dotenv from 'dotenv';
 import { initializeApp } from "firebase/app";
-import { getFirestore, doc, getDoc } from "firebase/firestore";
+import { getFirestore, doc, getDoc, updateDoc } from "firebase/firestore";
 import admin from 'firebase-admin';
 import validator from 'validator';
 import { isValidUsername, isValidRoomId, sanitizeMessage, isValidMove } from './utils/validation.js';
+import { calculateEloChange } from '../src/utils/elo.js';
+import { MatchQueue } from './utils/MatchMaker.js';
+import { randomScrambleForEvent } from "cubing/scramble";
 
 // Load environment variables
 dotenv.config();
@@ -288,14 +291,102 @@ io.on('connection', (socket) => {
     };
     socket.on('join_room', validate(socket, isValidRoomId, handleJoinRoom));
 
+// Matchmaking Queue
+const matchQueue = new MatchQueue();
+const socketToUserMap = {}; // Helper to retrieve user data for match payload
+
+// Matchmaking Loop (Runs every 1 second)
+setInterval(async () => {
+    const match = matchQueue.findMatch();
+    
+    if (match) {
+        const { player1, player2 } = match;
+        
+        // Generate Server-Side Scramble
+        let scrambleString = "R U R' U'"; // Fallback
+        try {
+            const scramble = await randomScrambleForEvent("333");
+            scrambleString = scramble.toString();
+        } catch (e) {
+            console.error("Failed to generate scramble:", e);
+        }
+
+        const roomId = `room_${uuidv4().slice(0, 8)}`;
+        
+        // Retrieve Sockets
+        const socket1 = io.sockets.sockets.get(player1.socketId);
+        const socket2 = io.sockets.sockets.get(player2.socketId);
+
+        // Retrieve User Data
+        const user1Data = socketToUserMap[player1.socketId];
+        const user2Data = socketToUserMap[player2.socketId];
+
+        if (socket1 && socket2 && user1Data && user2Data) {
+            // Join Room
+            socket1.join(roomId);
+            socket2.join(roomId);
+            
+            // Track Rooms
+            socketRooms[player1.socketId] = roomId;
+            socketRooms[player2.socketId] = roomId;
+
+            // Add to Active Rooms
+            activeRooms[roomId] = {
+                id: roomId,
+                type: '3x3',
+                player1: { 
+                    id: user1Data.uid, 
+                    name: user1Data.displayName, 
+                    socketId: player1.socketId 
+                },
+                player2: { 
+                    id: user2Data.uid, 
+                    name: user2Data.displayName, 
+                    socketId: player2.socketId 
+                },
+                startTime: Date.now(),
+                scramble: scrambleString
+            };
+
+            console.log(`Match Found! Room: ${roomId} | ${user1Data.displayName} vs ${user2Data.displayName}`);
+
+            // Notify Players (MATCH_START)
+            socket1.emit('match_start', { 
+                matchId: roomId, 
+                opponentInfo: user2Data, 
+                scrambleString 
+            });
+
+            socket2.emit('match_start', { 
+                matchId: roomId, 
+                opponentInfo: user1Data, 
+                scrambleString 
+            });
+        } else {
+            // Cleanup if sockets are missing
+            console.warn("Match found but socket(s) disconnected.");
+        }
+    }
+}, 1000);
+
+// Socket Connection
+io.on('connection', (socket) => {
+    console.log(`User Connected: ${socket.id}`);
+    
+    // Rate Limiter
+    if (!rateLimits[socket.id]) rateLimits[socket.id] = { count: 0, lastReset: Date.now() };
+
+    // Clean up queue on disconnect if needed (MatchQueue.removePlayer handled later)
+
     // Send Move
     const handleSendMove = (socket, moveData) => {
-        // moveData might be object { move: "R", timestamp: ... } or string "R"
+        if (!checkRateLimit(socket)) return;
         
+        // ... (existing move handler) ...
         let move = moveData;
         let timestamp = Date.now();
         let state = null;
-
+        
         if (typeof moveData === 'object') {
             move = moveData.move;
             if (moveData.timestamp) timestamp = moveData.timestamp;
@@ -360,60 +451,13 @@ io.on('connection', (socket) => {
             // Fail open or closed? For now, log error and proceed, but in strict mode we might block.
         }
 
-        // Remove from queue if already there to prevent duplicates
-        queue3x3 = queue3x3.filter(s => s.socket.id !== socket.id); 
+        // Store user data
+        socketToUserMap[socket.id] = user;
 
-        queue3x3.push({ socket, userData: user }); // Push userData
-
-        // Check for Match
-        if (queue3x3.length >= 2) {
-            const p1 = queue3x3.shift();
-            const p2 = queue3x3.shift();
-
-            const roomId = `room_${uuidv4().slice(0, 8)}`;
-            
-            // Join Room
-            p1.socket.join(roomId);
-            p2.socket.join(roomId);
-            
-            // Track Rooms
-            socketRooms[p1.socket.id] = roomId;
-            socketRooms[p2.socket.id] = roomId;
-
-            // Add to Active Rooms
-            activeRooms[roomId] = {
-                id: roomId,
-                type: '3x3',
-                player1: { 
-                    id: p1.userData.uid, 
-                    name: p1.userData.displayName, 
-                    socketId: p1.socket.id 
-                },
-                player2: { 
-                    id: p2.userData.uid, 
-                    name: p2.userData.displayName, 
-                    socketId: p2.socket.id 
-                },
-                startTime: Date.now()
-            };
-
-            console.log(`Match Found! Room: ${roomId} | ${p1.userData.displayName} vs ${p2.userData.displayName}`);
-
-            // Notify Players
-            p1.socket.emit('match_found', { 
-                roomId, 
-                opponent: p2.userData, 
-                isHost: true,
-                scramble: "R U R' U' R U R' U' R U R' U'" // Generate real scramble later
-            });
-
-            p2.socket.emit('match_found', { 
-                roomId, 
-                opponent: p1.user, 
-                isHost: false,
-                scramble: "R U R' U' R U R' U' R U R' U'"
-            });
-        }
+        // Add to MatchQueue
+        // Assuming user.elo exists, otherwise default
+        const elo = user.elo || 800; // Default Elo
+        matchQueue.addPlayer({ socketId: socket.id, elo });
     });
 
     // SIGNALING (Relay WebRTC messages)
@@ -459,6 +503,66 @@ io.on('connection', (socket) => {
             }
         }
         delete rateLimits[socket.id];
+    });
+
+    // MATCH FINISHED - ELO CALCULATION
+    socket.on('match_finished', async (data) => {
+        if (!checkRateLimit(socket)) return;
+
+        const { roomId, winnerId } = data;
+        const room = activeRooms[roomId];
+
+        if (!room) {
+            // Room might have been cleaned up already
+            return;
+        }
+
+        try {
+            // 1. Fetch Players from DB
+            const user1Ref = doc(db, 'users', room.player1.id);
+            const user2Ref = doc(db, 'users', room.player2.id);
+
+            const [user1Snap, user2Snap] = await Promise.all([
+                getDoc(user1Ref),
+                getDoc(user2Ref)
+            ]);
+
+            if (!user1Snap.exists() || !user2Snap.exists()) {
+                console.error('One or more users not found in DB');
+                return;
+            }
+
+            const user1Data = user1Snap.data();
+            const user2Data = user2Snap.data();
+
+            // Default to 800 if undefined
+            const rating1 = user1Data.elo || 800;
+            const rating2 = user2Data.elo || 800;
+
+            // 2. Calculate Actual Score for Player 1
+            let scoreP1 = 0.5;
+            if (winnerId === room.player1.id) scoreP1 = 1;
+            else if (winnerId === room.player2.id) scoreP1 = 0;
+
+            // 3. Calculate Elo Change
+            const { newRatingA, newRatingB } = calculateEloChange(rating1, rating2, scoreP1);
+
+            // 4. Update Database
+            await Promise.all([
+                updateDoc(user1Ref, { elo: newRatingA }),
+                updateDoc(user2Ref, { elo: newRatingB })
+            ]);
+
+            // 5. Emit New Ratings
+            io.to(roomId).emit('new_ratings', {
+                [room.player1.id]: newRatingA,
+                [room.player2.id]: newRatingB
+            });
+
+        } catch (err) {
+            console.error('Error updating Elo ratings:', err);
+            socket.emit('error', { message: 'Failed to update match results.' });
+        }
     });
 });
 

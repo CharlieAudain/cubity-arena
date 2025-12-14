@@ -91,7 +91,29 @@ export abstract class SmartDevice {
    * @param device - The Bluetooth device to connect to
    * @throws Error if connection fails
    */
+  /**
+   * Connect to the smart cube device.
+   * Implementations must:
+   * 1. Establish GATT connection
+   * 2. Discover services and characteristics
+   * 3. Perform encryption handshake (if required)
+   * 4. Subscribe to notifications
+   * 5. Emit 'status' events during connection process
+   * 
+   * @param device - The Bluetooth device to connect to
+   * @throws Error if connection fails
+   */
   abstract connect(device: BluetoothDevice): Promise<void>;
+
+  /**
+   * Attach to an already connected device.
+   * Used when the DriverManager handles the connection to inspect services.
+   * 
+   * @param device - The Bluetooth device
+   * @param server - The connected GATT server
+   * @param serviceUUIDs - List of available service UUIDs
+   */
+  abstract attach(device: BluetoothDevice, server: BluetoothRemoteGATTServer, serviceUUIDs: string[]): Promise<void>;
 
   /**
    * Disconnect from the smart cube device.

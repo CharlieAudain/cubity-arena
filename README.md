@@ -25,7 +25,7 @@ Tech Stack: Vite + React (Frontend), Tailwind CSS (Styling), Firebase (Auth & Fi
 
 Deployment: Live on Vercel with CI/CD.
 
-Authentication: Robust system supporting Guest Mode (frictionless entry), Google Sign-In, and account linking to save progress.
+Authentication: Robust system supporting Google Sign-In and account linking to save progress.
 
 🧩 The Timer Engine
 

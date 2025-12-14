@@ -34,6 +34,14 @@ export class GoCubeDriver extends SmartDevice {
 
     console.log('[GoCubeDriver] Connecting...');
     const server = await device.gatt.connect();
+    const services = await server.getPrimaryServices();
+    const serviceUUIDs = services.map(s => s.uuid);
+    
+    await this.attach(device, server, serviceUUIDs);
+  }
+
+  async attach(device: BluetoothDevice, server: BluetoothRemoteGATTServer, serviceUUIDs: string[]): Promise<void> {
+    this.device = device;
     
     console.log('[GoCubeDriver] Getting Service...');
     this.service = await server.getPrimaryService(SERVICE_UUID);

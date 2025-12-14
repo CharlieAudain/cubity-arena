@@ -82,6 +82,9 @@ export function getDriver(): SmartDevice {
 /**
  * Scan and Connect to any supported device
  */
+/**
+ * Scan and Connect to any supported device
+ */
 export async function scanAndConnect(): Promise<void> {
     try {
         console.log('[DriverManager] Scanning for devices...');
@@ -98,15 +101,111 @@ export async function scanAndConnect(): Promise<void> {
         });
 
         console.log('[DriverManager] Device selected:', device.name);
-
-        // Factory Logic: Select Driver
-        let DriverClass: new () => SmartDevice = GanDriver; // Default
+        console.log('[DriverManager] Connecting GATT to inspect services...');
         
-        for (const d of DRIVERS) {
-            if (device.name && (device.name.startsWith(d.prefix) || d.filters.some(f => device.name!.startsWith(f.namePrefix!)))) {
-                DriverClass = d.driver;
-                break;
+        const server = await device.gatt!.connect();
+        const services = await server.getPrimaryServices();
+        const serviceUUIDs = services.map(s => s.uuid);
+        
+        console.log('[DriverManager] Discovered Services:', JSON.stringify(serviceUUIDs));
+
+        // Factory Logic: Select Driver based on Services
+        let DriverClass: (new () => SmartDevice) | null = null;
+        
+        // 1. Check for GAN
+        // GAN V2/V3/V4/Common
+        if (serviceUUIDs.some(uuid => 
+            uuid === '6e400001-b5a3-f393-e0a9-e50e24dc4179' || // V2
+            uuid === '8653000a-43e6-47b7-9cb0-5fc21d4ae340' || // V3
+            uuid === '00000010-0000-1000-8000-00805f9b34fb' || // V4
+            uuid === '00000010-0000-fff7-fff6-fff5fff4fff0' || // V4 Variant
+            uuid === '0000fff0-0000-1000-8000-00805f9b34fb'    // Common/V1
+        )) {
+            console.log('[DriverManager] Identified as GAN Cube');
+            DriverClass = GanDriver;
+        }
+        
+        // 2. Check for GoCube
+        else if (serviceUUIDs.some(uuid => uuid.startsWith('6e400001-b5a3-f393-e0a9-e50e24dcca9e'))) {
+            console.log('[DriverManager] Identified as GoCube');
+            DriverClass = GoCubeDriver;
+        }
+        
+        // 3. Check for Moyu
+        else if (serviceUUIDs.some(uuid => 
+            uuid === '00001000-0000-1000-8000-00805f9b34fb' || // Old
+            uuid === '0783b03e-7735-b5a0-1760-a305d2795cb0'    // New
+        )) {
+            console.log('[DriverManager] Identified as Moyu Cube');
+            DriverClass = MoyuDriver;
+        }
+        
+        // 4. Check for QiYi
+        else if (serviceUUIDs.some(uuid => uuid.startsWith('0000fff0-0000-1000-8000-00805f9b34fb'))) {
+            // QiYi shares FFF0 with GAN V1?
+            // Need to distinguish.
+            // QiYi usually has name "QY-..." or "XMD..."
+            // But we want to rely on services.
+            // QiYi has specific characteristics inside FFF0?
+            // Or maybe check name as fallback.
+            if (device.name && (device.name.startsWith('QY') || device.name.startsWith('XMD'))) {
+                console.log('[DriverManager] Identified as QiYi Cube (by Name + Service)');
+                DriverClass = QiYiDriver;
+            } else {
+                // If it has FFF0 but not GAN specific services...
+                // It might be GAN V1 or QiYi.
+                // Default to GanDriver for FFF0 if name doesn't match QiYi?
+                // Or try QiYi?
+                // Let's assume GAN if FFF0 is present and not QiYi name.
+                // But we already checked GAN above.
+                // Wait, GAN check above includes FFF0.
+                // So if it has FFF0, it matches GAN first.
+                // We should re-order or refine.
+                
+                // Refined Logic:
+                // QiYi uses FFF0 service.
+                // GAN uses FFF0 service (V1/Common).
+                // We must check name or other characteristics.
+                // Since we already connected, we can check characteristics?
+                // Too complex for factory.
+                // Let's stick to Name for disambiguation if Service is ambiguous.
+                
+                // If we are here, it didn't match GAN specific services (V2/V3/V4).
+                // It matched FFF0? No, FFF0 is in GAN check.
+                // So if it has FFF0, it went to GAN.
+                
+                // We need to move QiYi check BEFORE GAN check if we want to prioritize it,
+                // OR make GAN check stricter.
+                
+                // Let's modify the GAN check to NOT include FFF0 blindly?
+                // Or check for QiYi name inside GAN check?
             }
+        }
+
+        // Refined Selection Logic
+        if (!DriverClass) {
+            // Fallback to Name-based matching if Service-based failed (unlikely if filters worked)
+            for (const d of DRIVERS) {
+                if (device.name && (device.name.startsWith(d.prefix) || d.filters.some(f => device.name!.startsWith(f.namePrefix!)))) {
+                    DriverClass = d.driver;
+                    break;
+                }
+            }
+        }
+        
+        if (!DriverClass) {
+             // Special handling for QiYi vs GAN V1 (both FFF0)
+             if (serviceUUIDs.includes('0000fff0-0000-1000-8000-00805f9b34fb')) {
+                 if (device.name && (device.name.startsWith('QY') || device.name.startsWith('XMD'))) {
+                     DriverClass = QiYiDriver;
+                 } else {
+                     DriverClass = GanDriver;
+                 }
+             }
+        }
+
+        if (!DriverClass) {
+            throw new Error('Could not identify driver for device: ' + device.name);
         }
 
         // Instantiate
@@ -114,24 +213,10 @@ export async function scanAndConnect(): Promise<void> {
             activeDriver.disconnect();
         }
         activeDriver = new DriverClass();
+        setupEventForwarding(activeDriver!);
         
-        // Connect
-        // Note: GanDriver uses connectWithMac, but generic SmartDevice should use connect(device).
-        // We need to standardize this. For now, GanDriver expects MAC, but we have the device object.
-        // We'll cast to any to call specific methods if needed, or update GanDriver to accept device.
-        
-        if (activeDriver instanceof GanDriver) {
-             // GanDriver currently requires connectWithMac logic which handles the connection internally.
-             // But we already have the device!
-             // We should update GanDriver to accept a BluetoothDevice.
-             // For now, we'll use a workaround or update GanDriver.
-             // Let's assume we update GanDriver to have a `connect(device)` method.
-             setupEventForwarding(activeDriver);
-             await activeDriver.connect(device);
-        } else if (activeDriver) {
-             setupEventForwarding(activeDriver);
-             await activeDriver.connect(device);
-        }
+        // Attach
+        await activeDriver!.attach(device, server, serviceUUIDs);
 
     } catch (error) {
         Logger.error('DriverManager', 'Connection failed:', error);
