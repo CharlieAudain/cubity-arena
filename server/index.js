@@ -290,6 +290,7 @@ io.on('connection', (socket) => {
         socket.to(roomId).emit('user_joined', { userId: socket.id, userData });
     };
     socket.on('join_room', validate(socket, isValidRoomId, handleJoinRoom));
+});
 
 // Matchmaking Queue
 const matchQueue = new MatchQueue();
