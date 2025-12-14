@@ -473,7 +473,7 @@ export default function App() {
                       <div className="h-px bg-white/10 my-1"></div>
                     </>
                   )}
-                  <a href="https://discord.gg/cubity" target="_blank" rel="noopener noreferrer" className="w-full flex items-center gap-2 px-4 py-3 text-sm text-indigo-400 hover:bg-indigo-500/10 hover:text-indigo-300 rounded-lg transition-colors font-medium">
+                  <a href="https://discord.gg/hRpeTnhZJE" target="_blank" rel="noopener noreferrer" className="w-full flex items-center gap-2 px-4 py-3 text-sm text-indigo-400 hover:bg-indigo-500/10 hover:text-indigo-300 rounded-lg transition-colors font-medium">
                     <MessageCircle className="w-4 h-4" />
                     <span>Join Discord</span>
                   </a>
