@@ -17,11 +17,11 @@ const ArenaView = ({ user, userData, smartCube, isAdmin }) => {
   const [debugRoom, setDebugRoom] = useState(null);
 
   if (debugRoom) {
-      return <BattleRoom user={user} roomData={debugRoom} roomId={debugRoom.id} onExit={() => setDebugRoom(null)} smartCube={smartCube} />;
+      return <BattleRoom user={user} userData={userData} roomData={debugRoom} roomId={debugRoom.id} onExit={() => setDebugRoom(null)} smartCube={smartCube} />;
   }
 
   if (status === 'found' && roomData) {
-      return <BattleRoom user={user} roomData={roomData} roomId={roomId} onExit={cancelSearch} smartCube={smartCube} />;
+      return <BattleRoom user={user} userData={userData} roomData={roomData} roomId={roomId} onExit={cancelSearch} smartCube={smartCube} />;
   }
 
   return (

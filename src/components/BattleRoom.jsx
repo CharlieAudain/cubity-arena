@@ -274,7 +274,7 @@ const BattleRoom = ({ user, userData, roomData, roomId, onExit, smartCube }) => 
                 <div className="flex items-center gap-3">
                     <div className="text-right">
                         <div className="text-xs text-slate-500 font-bold uppercase">YOU</div>
-                        <div className="text-white font-bold text-lg">{user.displayName || 'Guest'}</div>
+                        <div className="text-white font-bold text-lg">{userData?.displayName || user.displayName || 'Guest'}</div>
                         <div className="text-xs font-mono text-yellow-500 flex items-center justify-end gap-1">
                             <Crown className="w-3 h-3" /> 
                             {userData?.elo || user.elo || 800} ELO

@@ -455,7 +455,7 @@ io.on('connection', (socket) => {
             if (username && typeof username === 'string') {
                 const cleanUsername = username.trim().toLowerCase();
                 
-                if (cleanUsername.length > 0 && !cleanUsername.includes('/')) {
+                if (cleanUsername.length > 0 && !cleanUsername.includes('/') && cleanUsername !== '') {
                      // console.log(`[BanCheck] Checking username: '${cleanUsername}'`);
                      const bannedRef = doc(db, 'artifacts', 'cubity-v1', 'public', 'data', 'banned_users', cleanUsername);
                      const bannedSnap = await getDoc(bannedRef);

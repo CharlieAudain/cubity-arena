@@ -566,7 +566,7 @@ export default function App() {
         
 
         
-        {activeTab === 'arena' && user && <ArenaView user={user} smartCube={smartCube} isAdmin={isAdmin()} />}
+        {activeTab === 'arena' && user && <ArenaView user={user} userData={userData} smartCube={smartCube} isAdmin={isAdmin()} />}
 
         {activeTab === 'timer' && (
           user ? (
@@ -617,6 +617,18 @@ export default function App() {
             <div className="max-w-md mx-auto">
                 <h2 className="text-2xl font-black italic text-white mb-8 tracking-tighter">SETTINGS</h2>
                 
+                <div className="flex items-center gap-3">
+                  <span className="text-white font-bold hidden md:block">
+                    {userData?.displayName || user.displayName}
+                  </span>
+                  {user.photoURL ? (
+                    <img src={user.photoURL} alt="Profile" className="w-8 h-8 rounded-full border border-white/20" />
+                  ) : (
+                    <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center border border-white/20">
+                      <span className="text-white font-bold text-xs">{(userData?.displayName || user.displayName || 'U')[0].toUpperCase()}</span>
+                    </div>
+                  )}
+                </div>
                 <div className="bg-slate-900 border border-white/10 rounded-xl p-6 mb-6">
                     <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
                         <Bluetooth className="w-5 h-5 text-blue-400" /> Smart Cube
