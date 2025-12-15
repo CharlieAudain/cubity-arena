@@ -35,7 +35,7 @@ Built with a modern JavaScript stack focused on performance and real-time data.
 ## 🚀 Getting Started
 
 This project is structured as a **Monorepo**.
-* `/client`: The React frontend.
+* `/`: The React frontend.
 * `/server`: The Node.js backend API.
 
 ### Prerequisites
@@ -91,7 +91,7 @@ Terminal 2 (Frontend):
 
 Bash
 
-cd client
+
 npm run dev
 Open http://localhost:5173 to view it in the browser.
 
@@ -118,6 +118,6 @@ Role: Full Stack Developer
 
 Location: London, UK
 
-Portfolio: []
+Portfolio: [https://dainz.co.uk]
 
 GitHub: [https://github.com/CharlieAudain]
