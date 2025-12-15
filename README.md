@@ -48,7 +48,7 @@ This project is structured as a **Monorepo**.
 Clone the repository:
 ```bash
 git clone [https://github.com/CharlieAudain/cubity-arena.git](https://github.com/CharlieAudain/cubity-arena.git)
-cd cubity
+cd cubity-arena
 Install Server Dependencies:
 
 Bash
@@ -59,7 +59,7 @@ Install Client Dependencies:
 
 Bash
 
-cd ../client
+cd ..
 npm install
 2. Environment Variables
 You must create a .env file in both directories.
@@ -71,7 +71,7 @@ Code snippet
 PORT=3001
 FIREBASE_ADMIN_KEY=...
 CLIENT_URL=http://localhost:5173
-Client (/client/.env):
+Client (/.env):
 
 Code snippet
 
