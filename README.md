@@ -16,7 +16,7 @@
 * **⚔️ Ranked Matchmaking:** Real-time 1v1 battles using an ELO rating system (Ripple Search algorithm).
 * **🔌 Smart Cube Integration:** Native support for Bluetooth hardware (Gan, Moyu) to visualize opponent moves in real-time.
 * **⚡ WebSocket Architecture:** Zero-latency state synchronization for instant result verification.
-* **📊 Post-Match Analytics:** Heatmap analysis of solve phases (Cross, F2L, OLL, PLL).
+* **📊 Post-Match Analytics:** Heatmap analysis of solve phases (Cross, F2L, OLL, PLL). (Coming Soon)
 
 ---
 
