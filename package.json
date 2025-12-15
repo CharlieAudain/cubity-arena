@@ -31,7 +31,7 @@
     "scrambo": "^0.3.0",
     "socket.io": "^4.8.1",
     "socket.io-client": "^4.8.1",
-    "three": "^0.181.2",
+    "three": "^0.182.0",
     "uuid": "^13.0.0",
     "validator": "^13.15.23"
   },
