@@ -4,7 +4,7 @@
 
 ![License](https://img.shields.io/badge/license-AGPLv3-blue.svg)
 ![Status](https://img.shields.io/badge/status-Public%20Beta-orange.svg)
-!![Stack](https://img.shields.io/badge/stack-React%20%2F%20Node%20%2F%20Firebase-yellow)
+![Stack](https://img.shields.io/badge/stack-React%20%2F%20Node%20%2F%20Firebase-yellow)
 
 ## 📖 About The Project
 
