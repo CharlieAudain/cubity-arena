@@ -84,7 +84,10 @@ const TimerView = ({
   // --- SMART CUBE INTEGRATION ---
   useEffect(() => {
     if (smartCube && smartCube.isConnected) {
-        setShowSyncPrompt(true); // Show one-time sync prompt
+        const dismissed = localStorage.getItem('cubity_sync_warning_dismissed') === 'true';
+        if (!dismissed) {
+            setShowSyncPrompt(true); // Show one-time sync prompt
+        }
 
         if (smartCube.moveHistory && smartCube.moveHistory.length > 0) {
             // Process all new moves from history
@@ -509,7 +512,10 @@ const TimerView = ({
         {showSyncPrompt && smartCube && smartCube.isConnected && (
             <div className="absolute top-[-60px] left-1/2 transform -translate-x-1/2 bg-blue-600 text-white px-4 py-2 rounded-lg shadow-xl text-xs font-bold whitespace-nowrap z-50 flex items-center gap-3 animate-in fade-in slide-in-from-bottom-2">
                 <span>Please ensure your physical cube is solved to sync.</span>
-                <button onClick={() => setShowSyncPrompt(false)} className="bg-white/20 hover:bg-white/30 rounded px-2 py-0.5">OK</button>
+                <button onClick={() => {
+                    setShowSyncPrompt(false);
+                    localStorage.setItem('cubity_sync_warning_dismissed', 'true');
+                }} className="bg-white/20 hover:bg-white/30 rounded px-2 py-0.5">OK</button>
             </div>
         )}
 
@@ -527,7 +533,7 @@ const TimerView = ({
       <div className="mb-8 relative z-10 w-full max-w-lg mx-auto h-48 md:h-64">
           <ErrorBoundary fallback={<div className="text-slate-500 flex items-center justify-center h-full border border-slate-700 rounded-lg">3D Cube Failed to Load</div>}>
             <SmartCube3D 
-                scramble={scramble} 
+                scramble={smartCube?.isConnected ? '' : scramble} 
                 type={cubeType} 
                 moveHistory={smartCube?.isConnected ? smartCube.moveHistory : null} 
                 gyro={smartCube?.gyro}
