@@ -1,125 +1,123 @@
-🧊 CUBITY
+# 🧊 Cubity - The Competitive Speedcubing Platform
 
-The fastest, most competitive speedcubing platform on the web.
-A "Unicorn Strategy" project focusing on high-performance, social connectivity, and hardware integration.
+> **"Chess.com for Speedcubing"** — A real-time, ELO-based ranked battling platform for speedcubers.
 
-🚀 Vision & Strategy
+![License](https://img.shields.io/badge/license-AGPLv3-blue.svg)
+![Status](https://img.shields.io/badge/status-Public%20Beta-orange.svg)
+!![Stack](https://img.shields.io/badge/stack-React%20%2F%20Node%20%2F%20Firebase-yellow)
 
-Cubity is not just another timer app. It is a Connected Gaming Platform for the speedcubing community. Our goal is to transition the sport from solitary practice to a socially connected, competitive esport.
+## 📖 About The Project
 
-We are executing a "Hardware-Enabled SaaS" strategy (similar to Peloton or Whoop), moving through three distinct phases:
+**Cubity** is a web application designed to gamify speedcubing practice. Unlike traditional static timers, Cubity focuses on **Synchronous Multiplayer** competition. It utilizes a custom matchmaking algorithm to pair users based on skill (ELO), providing a fair and competitive environment similar to modern eSports titles.
 
-The Build (Current): Perfecting the core software engine, data analytics, and user experience.
+**Live Site:** [Insert Your Live URL Here]
 
-The Network: Introducing real-time multiplayer ("The Arena"), ranked leagues, and social features to build a defensible moat.
+### ✨ Key Features
+* **⚔️ Ranked Matchmaking:** Real-time 1v1 battles using an ELO rating system (Ripple Search algorithm).
+* **🔌 Smart Cube Integration:** Native support for Bluetooth hardware (Gan, Moyu) to visualize opponent moves in real-time.
+* **⚡ WebSocket Architecture:** Zero-latency state synchronization for instant result verification.
+* **📊 Post-Match Analytics:** Heatmap analysis of solve phases (Cross, F2L, OLL, PLL).
 
-The Ecosystem: Launching proprietary hardware (Cubity One) to unlock anti-cheat verified tournaments and professional AI coaching.
+---
 
-⚡ Current Progress (Alpha 1.0)
+## 🛠️ Tech Stack
 
-We have successfully built and deployed the foundational "Single Player" experience.
+Built with a modern JavaScript stack focused on performance and real-time data.
 
-✅ Core Infrastructure
+* **Frontend:** React (Vite), TailwindCSS, Three.js (for 3D Cube Visualization).
+* **Backend:** Node.js, Express, Socket.io (Real-time communication).
+* **Database:** Google Firestore (User Data & Match History).
+* **Authentication:** Firebase Auth.
+* **Hosting:** Railway (Server) & Vercel (Client).
 
-Tech Stack: Vite + React (Frontend), Tailwind CSS (Styling), Firebase (Auth & Firestore).
+---
 
-Deployment: Live on Vercel with CI/CD.
+## 🚀 Getting Started
 
-Authentication: Robust system supporting Google Sign-In and account linking to save progress.
+This project is structured as a **Monorepo**.
+* `/client`: The React frontend.
+* `/server`: The Node.js backend API.
 
-🧩 The Timer Engine
+### Prerequisites
+* Node.js (v18+)
+* npm or yarn
+* A Firebase Project (for API keys)
 
-Pro-Grade Timer: Keyboard (Spacebar) and Touch controls with inspection logic.
+### 1. Installation
 
-Scramble Generation: legitimate, random scrambles for 2x2, 3x3, and 4x4 puzzles.
-
-Scramble Visualization: 2D unfolded net visualizer that accurately renders the scrambled state.
-
-📊 Data & Analytics
-
-Persistent History: All solves are saved to a scalable Firestore database.
-
-Smart Stats: Automatic calculation of Ao5 (Average of 5) and Ao12.
-
-Filtering: View history by puzzle type (2x2, 3x3, 4x4).
-
-Penalty System: Full support for +2 and DNF penalties, with stats recalculating instantly.
-
-"Best vs Current": Toggle to see your all-time best averages vs your current session.
-
-⚔️ The Arena (Multiplayer Beta)
-
-Matchmaking System: A serverless, client-side matchmaking hook (useMatchmaking).
-
-Lobby System: Users can Host or Join rooms based on puzzle type (2x2 queue, 3x3 queue, etc.).
-
-Battle Room: A dedicated VS screen where opponents see the exact same scramble to ensure fair play.
-
-Live Status: Real-time syncing of match results (Win/Loss/Draw).
-
-🎨 Design & Branding
-
-"Velocity" Theme: A custom aesthetic built on electric blues (#3b82f6) and deep indigo, designed to feel fast and energetic.
-
-Responsive: Fully optimized for Desktop (keyboard focus) and Mobile (touch-friendly large tap zones).
-
-🛠️ Roadmap (The Path to Unicorn)
-
-🛑 Sprint 1: The Core Loop (Completed)
-
-[x] Timer Engine & Scrambles
-
-[x] Auth & Database
-
-[x] Stats & History
-
-[x] Visualizer
-
-⚔️ Sprint 2: The Multiplayer Engine (In Progress)
-
-[x] Matchmaking Logic
-
-[x] Battle Room UI
-
-[ ] Live Progress Sync: Seeing the opponent's cube move in real-time during the solve.
-
-[ ] ELO System: Ranking players (Bronze/Silver/Gold) based on match outcomes.
-
-🔌 Sprint 3: Hardware Integration (Next)
-
-[x] Bluetooth Driver: Connecting to GAN/GoCube smart cubes via Web Bluetooth API.
-
-[x] Auto-Timer: Timer starts/stops automatically when physical moves are detected.
-
-[x] 3D Replay: Replaying solves move-by-move to analyze mistakes.
-
-💻 Local Development
-
-Clone the repo:
-
-git clone [https://github.com/YOUR_USERNAME/cubity.git](https://github.com/YOUR_USERNAME/cubity.git)
+Clone the repository:
+```bash
+git clone [https://github.com/CharlieAudain/cubity-arena.git](https://github.com/CharlieAudain/cubity-arena.git)
 cd cubity
+Install Server Dependencies:
 
+Bash
 
-Install dependencies:
-
+cd server
 npm install
+Install Client Dependencies:
 
+Bash
 
-Configure Environment:
-Create a .env.local file in the root directory with your Firebase keys:
+cd ../client
+npm install
+2. Environment Variables
+You must create a .env file in both directories.
 
-VITE_API_KEY=...
-VITE_AUTH_DOMAIN=...
-VITE_PROJECT_ID=...
-VITE_STORAGE_BUCKET=...
-VITE_MESSAGING_SENDER_ID=...
-VITE_APP_ID=...
+Server (/server/.env):
 
+Code snippet
 
-Run the app:
+PORT=3001
+FIREBASE_ADMIN_KEY=...
+CLIENT_URL=http://localhost:5173
+Client (/client/.env):
 
+Code snippet
+
+VITE_API_URL=http://localhost:3001
+VITE_FIREBASE_API_KEY=...
+VITE_FIREBASE_AUTH_DOMAIN=...
+3. Running Locally
+To run the full stack, you need two terminal windows.
+
+Terminal 1 (Backend):
+
+Bash
+
+cd server
+node index.js
+Terminal 2 (Frontend):
+
+Bash
+
+cd client
 npm run dev
+Open http://localhost:5173 to view it in the browser.
 
+🤝 Contributing
+Contributions are what make the open source community such an amazing place to learn, inspire, and create. Any contributions you make are greatly appreciated.
 
-Built with 💙 for speedcubers.
+Fork the Project
+
+Create your Feature Branch (git checkout -b feature/AmazingFeature)
+
+Commit your Changes (git commit -m 'Add some AmazingFeature')
+
+Push to the Branch (git push origin feature/AmazingFeature)
+
+Open a Pull Request
+
+🛡️ License
+Distributed under the AGPLv3 License. See LICENSE for more information.
+
+👤 Author
+Charles Audain
+
+Role: Full Stack Developer
+
+Location: London, UK
+
+Portfolio: []
+
+GitHub: [https://github.com/CharlieAudain]
