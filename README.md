@@ -66,14 +66,12 @@ You must create a .env file in both directories.
 
 Server (/server/.env):
 
-Code snippet
 
 PORT=3001
 FIREBASE_ADMIN_KEY=...
 CLIENT_URL=http://localhost:5173
 Client (/.env):
 
-Code snippet
 
 VITE_API_URL=http://localhost:3001
 VITE_FIREBASE_API_KEY=...
@@ -102,6 +100,7 @@ Fork the Project
 
 Create your Feature Branch (git checkout -b feature/AmazingFeature)
 
+Code snippet
 Commit your Changes (git commit -m 'Add some AmazingFeature')
 
 Push to the Branch (git push origin feature/AmazingFeature)
@@ -118,6 +117,6 @@ Role: Full Stack Developer
 
 Location: London, UK
 
-Portfolio: [https://dainz.co.uk]
+Portfolio: https://dainz.co.uk
 
-GitHub: [https://github.com/CharlieAudain]
+GitHub: https://github.com/CharlieAudain
