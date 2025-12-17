@@ -10,7 +10,7 @@
 
 **Cubity** is a web application designed to gamify speedcubing practice. Unlike traditional static timers, Cubity focuses on **Synchronous Multiplayer** competition. It utilizes a custom matchmaking algorithm to pair users based on skill (ELO), providing a fair and competitive environment similar to modern eSports titles.
 
-**Live Site:** [https://www.cubity.app/]
+**Live Site:** https://www.cubity.app/
 
 ### ✨ Key Features
 * **⚔️ Ranked Matchmaking:** Real-time 1v1 battles using an ELO rating system (Ripple Search algorithm).
