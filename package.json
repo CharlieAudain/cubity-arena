@@ -20,7 +20,7 @@
     "cube-solver": "^2.4.1",
     "cubing": "^0.61.0",
     "dotenv": "^17.2.3",
-    "express": "^5.1.0",
+    "express": "^5.2.1",
     "firebase": "^12.6.0",
     "firebase-admin": "^13.6.0",
     "gan-web-bluetooth": "^3.0.2",
